@@ -449,7 +449,10 @@ contains
        if (use_cn) then
           ! For dry-deposition need to call CLMSP so that mlaidiff is obtained
           if ( n_drydep > 0 .and. drydep_method == DD_XLND ) then
+             call t_startf('interpMonthlyVeg')
+             print *, "TURNED OFF INTERPMONTHLYVEG"
              !call interpMonthlyVeg(bounds_proc, canopystate_vars)
+             call t_stopf('interpMonthlyVeg')
           endif
 
        else
@@ -460,8 +463,10 @@ contains
           ! weights obtained here are used in subroutine SatellitePhenology to obtain time
           ! interpolated values.
           if (doalb .or. ( n_drydep > 0 .and. drydep_method == DD_XLND )) then
-             !print *, "TURNED OFF INTERPMONTHLYVEG"
+             print *, "TURNED OFF INTERPMONTHLYVEG"
+              call t_startf('interpMonthlyVeg')
              !call interpMonthlyVeg(bounds_proc, canopystate_vars)
+             call t_stopf('interpMonthlyVeg')
           end if
        end if
     end if
@@ -472,10 +477,9 @@ contains
     call shr_orb_decl(nextsw_cday_mod, eccen, mvelpp, lambm0, obliqr, declinp1, eccf )
     !$acc end serial
     
-   !print *, "1st loop!"
-
-   !$acc parallel default(present)
-     !$acc loop independent gang private(nc, bounds_clump)
+   print *, "first loop!"
+  !$acc parallel default(present)
+   !$acc loop independent gang private(nc, bounds_clump)
     do nc = 1, nclumps
       call get_clump_bounds_gpu(nc, bounds_clump)
       !
@@ -544,8 +548,6 @@ contains
 
    end do
   !$acc end parallel
-
-  !print *, "2nd loop!"
      
   !$acc parallel default(present)
 
@@ -619,6 +621,7 @@ contains
                col_ns, col_ps )
        end if
 
+
     end do
     !$acc end parallel
     
@@ -636,13 +639,9 @@ contains
                 write(iulog,*) '--WARNING-- skipping CN balance check for first timestep'
              end if
           else
-
-            !print *, "3rd loop!"
-
             !$acc parallel default(present)
 
               !$acc loop independent gang private(nc, bounds_clump)
-
 
              do nc = 1,nclumps
                 call get_clump_bounds_gpu(nc, bounds_clump)
@@ -699,14 +698,9 @@ contains
     ! For CNP: This needs to be done after dynSubgrid_driver, because the
     ! changes due to dynamic area adjustments can break column-level conservation
     ! ============================================================================
-
-    !print *, "4th loop!"
-
     !$acc parallel default(present)
 
       !$acc loop independent gang private(nc, bounds_clump)
-
-
      do nc = 1,nclumps
        call get_clump_bounds_gpu(nc, bounds_clump)
 
@@ -764,9 +758,11 @@ contains
 
 #ifndef CPL_BYPASS
     if (use_cn) then
+       call t_startf('ndep_interp')
        ! PET: switching CN timestep
        call ndep_interp(bounds_proc, atm2lnd_vars)
        call FireInterp(bounds_proc)
+       call t_stopf('ndep_interp')
     end if
 
     ! ============================================================================
@@ -1282,8 +1278,10 @@ contains
     ! ============================================================================
     !! MOVE outside of clm_driver ?
     if (.not. use_noio) then
-
+        
+       call t_startf('clm_drv_io')
        ! Create history and write history tapes if appropriate
+       call t_startf('clm_drv_io_htapes')
 
        call hist_htapes_wrapup(step_count,24*numdays, rstwr, nlend, bounds_proc,                    &
             soilstate_vars%watsat_col(bounds_proc%begc:bounds_proc%endc, 1:), &
@@ -1291,10 +1289,11 @@ contains
             soilstate_vars%bsw_col(bounds_proc%begc:bounds_proc%endc, 1:),    &
             soilstate_vars%hksat_col(bounds_proc%begc:bounds_proc%endc, 1:))
         call set_gpu_tape()
+        call t_stopf('clm_drv_io_htapes')
         
        ! Write restart/initial files if appropriate
        if (rstwr) then
-          !print *, "restart writing RDATE:",rdate
+          call t_startf('clm_drv_io_wrest')
           filer = restFile_filename(rdate=rdate)
          !$acc exit data copyout(atm2lnd_vars, canopystate_vars, energyflux_vars,&
          !$acc col_ef, veg_ef, frictionvel_vars, lakestate_vars, photosyns_vars, &
@@ -1322,7 +1321,10 @@ contains
          ! end if
          !----------------------------------------------
 
+
+          call t_stopf('clm_drv_io_wrest')
        end if
+       call t_stopf('clm_drv_io')
 
     end if
 
