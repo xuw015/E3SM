@@ -491,16 +491,18 @@ contains
        ! When time is not updated at the beginning of the loop - then return only if
        ! are in sync with clock before time is updated
 
-       !call get_curr_date( yr, mon, day, tod )
-       !ymd = yr*10000 + mon*100 + day
-       !tod = tod
+       call get_curr_date( yr, mon, day, tod )
+       ymd = yr*10000 + mon*100 + day
+       tod = tod
        !dosend = (seq_timemgr_EClockDateInSync( EClock, ymd, tod))
 
        ! Determine doalb based on nextsw_cday sent from atm model
 
-       !nstep = get_nstep()
-       !caldayp1 = get_curr_calday(offset=dtime)
-       !call update_rad_dtime(doalb)
+       nstep = get_nstep()
+print *, dosend, ymd, tod, yr, mon, day, nstep
+
+       caldayp1 = get_curr_calday(offset=dtime)
+       call update_rad_dtime(doalb)
 
        ! Determine if time to write cam restart and stop
 
@@ -534,7 +536,7 @@ contains
        !call t_startf ('lc_clm2_adv_timestep')
        call advance_timestep()
        !call t_stopf ('lc_clm2_adv_timestep')
-       if (step_count == 24+1) dosend = .true.
+       if (step_count == 24*1+1) dosend = .true.
     end do
     stoptime = mpi_wtime()
     print *, "TIME FOR CLM DRIVER(seconds):", stoptime-starttime 
