@@ -2027,7 +2027,6 @@
     </environment_variables>
   </machine>
 
-
   <machine MACH="excl">
     <DESC> Nvidia DGX, OS is Linux, 1 CPU/6 GPU Tesla/TPU </DESC>
     <NODENAME_REGEX>none</NODENAME_REGEX>
@@ -2035,8 +2034,8 @@
     <COMPILERS>pgi</COMPILERS>
     <MPILIBS>openmpi,mpi-serieal</MPILIBS>
     <CIME_OUTPUT_ROOT>$ENV{HOME}/project_e3sm/scratch</CIME_OUTPUT_ROOT>
-    <DIN_LOC_ROOT>$ENV{HOME}/project_e3sm/e3sm-inputdata</DIN_LOC_ROOT>
-    <DIN_LOC_ROOT_CLMFORC>$ENV{HOME}/project_e3sm/e3sm-inputdata/atm/datm7</DIN_LOC_ROOT_CLMFORC>
+    <DIN_LOC_ROOT>/home/7xw/project_e3sm/e3sm-inputdata</DIN_LOC_ROOT>
+    <DIN_LOC_ROOT_CLMFORC>/home/7xw/project_e3sm/e3sm-inputdata/atm/datm7</DIN_LOC_ROOT_CLMFORC>
     <DOUT_S_ROOT>$ENV{HOME}/project_e3sm/archives/$CASE</DOUT_S_ROOT>
     <BASELINE_ROOT>$ENV{HOME}/project_e3sm/baselines/$COMPILER</BASELINE_ROOT>
     <CCSM_CPRNC>$ENV{HOME}/project_e3sm/tools/cprnc.excl</CCSM_CPRNC>
@@ -2058,7 +2057,7 @@
     </mpirun>
     <module_system type="none"/>
 <!-- The following should be working, but NOT. 
-      Otherwise commentint out the line above this. And mannually load PGI or GNU
+ Otherwise comment out the line above this. And mannually load PGI or GNU
     <module_system type="module" allow_error="true">
       <init_path lang="csh">/etc/profile.d/modules.csh</init_path>
       <init_path lang="sh">/etc/profile.d/modules.sh</init_path>
@@ -2090,37 +2089,6 @@
       <env name="PROF">--annotate-mpi openmpi --openmp-profiling off</env>
     </environment_variables>
   </machine>
-
-
-  <machine MACH="oic5">
-    <DESC>ORNL XK6, os is Linux, 32 pes/node, batch system is PBS</DESC>
-    <NODENAME_REGEX>oic5</NODENAME_REGEX>
-    <OS>LINUX</OS>
-    <COMPILERS>gnu</COMPILERS>
-    <MPILIBS>mpich,openmpi</MPILIBS>
-    <CIME_OUTPUT_ROOT>/home/$USER/models/ACME</CIME_OUTPUT_ROOT>
-    <DIN_LOC_ROOT>/home/zdr/models/ccsm_inputdata</DIN_LOC_ROOT>
-    <DIN_LOC_ROOT_CLMFORC>/home/zdr/models/ccsm_inputdata/atm/datm7</DIN_LOC_ROOT_CLMFORC>
-    <DOUT_S_ROOT>/home/$USER/models/ACME/run/archive/$CASE</DOUT_S_ROOT>
-    <GMAKE_J>32</GMAKE_J>
-    <TESTS>e3sm_developer</TESTS>
-    <BATCH_SYSTEM>pbs</BATCH_SYSTEM>
-    <SUPPORTED_BY>dmricciuto</SUPPORTED_BY>
-    <MAX_TASKS_PER_NODE>32</MAX_TASKS_PER_NODE>
-    <MAX_MPITASKS_PER_NODE>32</MAX_MPITASKS_PER_NODE>
-    <mpirun mpilib="mpich">
-      <executable>/projects/cesm/devtools/mpich-3.0.4-gcc4.8.1/bin/mpirun</executable>
-      <arguments>
-        <arg name="num_tasks"> -np {{ total_tasks }}</arg>
-        <arg name="machine_file">--hostfile $ENV{PBS_NODEFILE}</arg>
-      </arguments>
-    </mpirun>
-    <mpirun mpilib="mpi-serial">
-      <executable> </executable>
-    </mpirun>
-    <module_system type="none" />
-    <RUNDIR>/home/$USER/models/ACME/run/$CASE/run</RUNDIR>
-    <EXEROOT>/home/$USER/models/ACME/run/$CASE/bld</EXEROOT>
 
   <machine MACH="dgx">
     <DESC> Nvidia DGX, OS is Ubutu Linux, 1 CPU/4 GPU Tesla V100</DESC>
@@ -3029,13 +2997,13 @@
 		 <arg name="show-processmap"> display-map </arg>
 		-->
 
-     <mpirun mpilib="openmpi" compiler="gnu">
-        <executable>mpirun</executable>
-        <arguments>
-           <arg name="machine_file"> --mca rmaps_base_no_schedule_local 1 --mca btl_openib_warn_default_gid_prefix 0 --mca routed direct --hostfile $ENV{LSB_DJOB_RANKFILE}</arg>
-           <arg name="num_tasks"> -np $TOTALPES </arg>
-        </arguments>
-    </mpirun>
+        <mpirun mpilib="openmpi" compiler="gnu">
+           <executable>mpirun</executable>
+           <arguments>
+              <arg name="machine_file"> --mca rmaps_base_no_schedule_local 1 --mca btl_openib_warn_default_gid_prefix 0 --mca routed direct --hostfile $ENV{LSB_DJOB_RANKFILE}</arg>
+              <arg name="num_tasks"> -np $TOTALPES </arg>
+           </arguments>
+     </mpirun>
  
      <module_system type="module" allow_error="true">
        <!-- list of init_path elements, one per supported language e.g. sh, perl, python-->

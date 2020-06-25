@@ -478,9 +478,10 @@ contains
     call shr_orb_decl(nextsw_cday_mod, eccen, mvelpp, lambm0, obliqr, declinp1, eccf )
     !$acc end serial
     
-  !print *, "first loop!"
-  !$acc parallel default(present)
-   !$acc loop independent gang private(nc, bounds_clump)
+   !print *, "1st loop!"
+
+   !$acc parallel default(present)
+     !$acc loop independent gang private(nc, bounds_clump)
     do nc = 1, nclumps
       call get_clump_bounds_gpu(nc, bounds_clump)
       !
@@ -549,6 +550,8 @@ contains
 
    end do
   !$acc end parallel
+
+  !print *, "2nd loop!"
      
   !$acc parallel default(present)
 
@@ -622,7 +625,6 @@ contains
                col_ns, col_ps )
        end if
 
-
     end do
     !$acc end parallel
     
@@ -640,9 +642,13 @@ contains
                 write(iulog,*) '--WARNING-- skipping CN balance check for first timestep'
              end if
           else
+
+            !print *, "3rd loop!"
+
             !$acc parallel default(present)
 
               !$acc loop independent gang private(nc, bounds_clump)
+
 
              do nc = 1,nclumps
                 call get_clump_bounds_gpu(nc, bounds_clump)
@@ -699,9 +705,14 @@ contains
     ! For CNP: This needs to be done after dynSubgrid_driver, because the
     ! changes due to dynamic area adjustments can break column-level conservation
     ! ============================================================================
+
+    !print *, "4th loop!"
+
     !$acc parallel default(present)
 
       !$acc loop independent gang private(nc, bounds_clump)
+
+
      do nc = 1,nclumps
        call get_clump_bounds_gpu(nc, bounds_clump)
 
@@ -786,8 +797,9 @@ contains
     ! ============================================================================
 
 
-    !print *, "main loop"
-  !$acc parallel vector_length(32) default(present)
+    !print *, "main (5th) loop"
+
+   !$acc parallel vector_length(32) default(present)
 
     !$acc loop independent gang private(nc, bounds_clump)
     do nc = 1,nclumps
@@ -911,14 +923,14 @@ contains
        ! ============================================================================
 
        ! Set lake temperature
-       !print *, "Lake Temperature:"
+
        call LakeTemperature(bounds_clump,                  &
                   filter(nc)%num_lakec, filter(nc)%lakec,  &
                   filter(nc)%num_lakep, filter(nc)%lakep,  &
                   solarabs_vars, soilstate_vars, ch4_vars, &
                   energyflux_vars, lakestate_vars, dtime_mod)
        ! Set soil/snow temperatures including ground temperature
-       !print *, "SoilTemperture"
+
        call SoilTemperature(bounds_clump,                            &
                    filter(nc)%num_urbanl  , filter(nc)%urbanl,       &
                    filter(nc)%num_nolakec , filter(nc)%nolakec,      &
@@ -928,7 +940,7 @@ contains
        ! ============================================================================
        ! update surface fluxes for new ground temperature.
        ! ============================================================================
-       !print *, "SoilFluxes"
+
        call SoilFluxes(bounds_clump,                                &
                    filter(nc)%num_urbanl,  filter(nc)%urbanl,       &
                    filter(nc)%num_nolakec, filter(nc)%nolakec,      &
@@ -947,7 +959,7 @@ contains
 
        ! Note that filter_snowc and filter_nosnowc are returned by
        ! LakeHydrology after the new snow filter is built
-       !print *, "NoDraingae"
+
 
        call HydrologyNoDrainage(bounds_clump,                     &
             filter(nc)%num_nolakec, filter(nc)%nolakec,           &
@@ -973,7 +985,7 @@ contains
        ! ============================================================================
        ! Lake hydrology
        ! ============================================================================
-       !print *, "Lkae Hydrology"
+
        ! Note that filter_lakesnowc and filter_lakenosnowc are returned by
        ! LakeHydrology after the new snow filter is built
        call LakeHydrology(bounds_clump,                                  &
@@ -1261,7 +1273,8 @@ contains
     ! ============================================================================
     ! Update history buffer
     ! ============================================================================
-    
+
+    !print *, "call hist buffer!"
     call hist_update_hbuf_gpu(mod(step_count,24), bounds_proc)
 
     ! ============================================================================
@@ -1283,6 +1296,8 @@ contains
 
        ! Create history and write history tapes if appropriate
 
+       !print *, "hist writing:"
+
        call hist_htapes_wrapup(rstwr, nlend, bounds_proc,                     &
             soilstate_vars%watsat_col(bounds_proc%begc:bounds_proc%endc, 1:), &
             soilstate_vars%sucsat_col(bounds_proc%begc:bounds_proc%endc, 1:), &
@@ -1292,7 +1307,7 @@ contains
 
        ! Write restart/initial files if appropriate
        if (rstwr) then
-          !print *, "RDATE:",rdate
+          !print *, "restart writing RDATE:",rdate
           filer = restFile_filename(rdate=rdate)
 
           call restFile_write( bounds_proc, filer,                                            &
@@ -1319,7 +1334,7 @@ contains
     if (use_pflotran .and. nstep_mod>=nestep) then
        call clm_pf_finalize()
     end if
-    if (step_count == 24) stop
+
     step_count = step_count + 1
      
   end subroutine clm_drv
