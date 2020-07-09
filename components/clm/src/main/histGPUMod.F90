@@ -738,7 +738,7 @@ end subroutine hist_update_hbuf_field_1d_gpu
     end if
 
     if (field_allocated) then
-       deallocate(field)
+       !deallocate(field)  ! gfortran says it's an error -- 'field' NOT an allocable
     end if
   end associate
   end subroutine hist_update_hbuf_field_2d_gpu
@@ -832,11 +832,9 @@ end subroutine hist_update_hbuf_field_1d_gpu
     implicit none
     integer :: size1,size2,t,f, field
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    print *, "updating tape_gpu on cpu:"
     !$acc update self(tape_gpu)
 
     !loop is done on cpu --- could accelerate using openACC cpu threading?
-    print *, "update tape on cpu"
     do field = 1, tape_gpu%nflds
       t = map_tapes(field) ; f = map_fields(field);
       tape(t)%hlist(f)%hbuf(:,:) = tape_gpu%hlist(f)%hbuf(:,:)

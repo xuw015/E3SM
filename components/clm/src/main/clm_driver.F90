@@ -1260,7 +1260,7 @@ contains
     ! Update history buffer
     ! ============================================================================
     
-        call hist_update_hbuf_gpu(step_count,24*numdays, nclumps)
+        call hist_update_hbuf_gpu(step_count,transfer_hist, nclumps)
     ! ============================================================================
     ! Compute water budget
     ! ============================================================================

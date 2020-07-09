@@ -15,6 +15,7 @@ module accumulGPUMod
   use GridcellType      , only : grc_pp
   use clm_varpar        , only : crop_prog
   use clm_varcon        , only : spval
+  use clm_varctl        , only : use_cn, use_fates
 
   type accum_field_gpu_type
      character(len=  8), pointer :: name    => null()  !field name
