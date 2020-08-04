@@ -95,11 +95,11 @@ module  PhotosynthesisMod
   !$acc declare copyin(stomatalcond_mtd_medlyn2011)
   type :: photo_params_type
      real(r8),pointer , public  :: krmax              (:)   => null()  
-     real(r8),pointer , private :: kmax               (:,:) => null()
-     real(r8),pointer , private :: psi50              (:,:) => null()
-     real(r8),pointer , private :: ck                 (:,:) => null()
+     real(r8),pointer , public  :: kmax               (:,:) => null()
+     real(r8),pointer , public  :: psi50              (:,:) => null()
+     real(r8),pointer , public  :: ck                 (:,:) => null()
      real(r8),pointer , public  :: psi_soil_ref       (:)   => null() 
-     real(r8),pointer , private :: lmr_intercept_atkin(:)   => null() 
+     real(r8),pointer , public  :: lmr_intercept_atkin(:)   => null() 
   contains
      procedure, private :: allocParams
      procedure, public :: readParams

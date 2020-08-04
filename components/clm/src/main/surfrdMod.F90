@@ -192,7 +192,6 @@ contains
     ! pflotran:beg-----------------------------------------------
     call ncd_inqdlen(ncid, dimid, nv, 'nv')
     if(.not. associated(ldomain%nv)) then
-         print *, "allocating ldomain%nv in surfrdMod",nv
          allocate(ldomain%nv)
     end if 
 

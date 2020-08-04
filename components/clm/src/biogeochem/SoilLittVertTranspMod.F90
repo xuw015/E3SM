@@ -442,14 +442,13 @@ contains
 
                   ! Solve for the concentration profile for this time step
                   call Tridiagonal(bounds, 0, nlevdecomp+1, &
-                       jtop, &
+                       jtop(bounds%begc:bounds%endc), &
                        num_soilc, filter_soilc, &
-                       a_tri, &
-                       b_tri, &
-                       c_tri, &
-                       r_tri, &
-                       conc_trcr)
-
+                       a_tri(bounds%begc:bounds%endc, :), &
+                       b_tri(bounds%begc:bounds%endc, :), &
+                       c_tri(bounds%begc:bounds%endc, :), &
+                       r_tri(bounds%begc:bounds%endc, :), &
+                       conc_trcr(bounds%begc:bounds%endc,0:nlevdecomp+1))
 
                   ! add post-transport concentration to calculate tendency term
                   do fc = 1, num_soilc

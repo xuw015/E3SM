@@ -72,9 +72,9 @@ module SurfaceAlbedoMod
 
   !
   ! !PRIVATE DATA FUNCTIONS:
-  real(r8), allocatable, private :: albsat (:,:) ! wet soil albedo by color class and waveband (1=vis,2=nir)
-  real(r8), allocatable, private :: albdry (:,:) ! dry soil albedo by color class and waveband (1=vis,2=nir)
-  integer , allocatable, private :: isoicol(:)  ! column soil color class
+  real(r8), allocatable , public :: albsat (:,:) ! wet soil albedo by color class and waveband (1=vis,2=nir)
+  real(r8), allocatable , public :: albdry (:,:) ! dry soil albedo by color class and waveband (1=vis,2=nir)
+  integer , allocatable , public :: isoicol(:)  ! column soil color class
   !$acc declare create(albsat )
   !$acc declare create(albdry )
   !$acc declare create(isoicol)

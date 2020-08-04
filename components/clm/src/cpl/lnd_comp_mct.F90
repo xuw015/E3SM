@@ -449,7 +449,6 @@ contains
     dtime = get_step_size()
 
     call seq_infodata_GetData(infodata, atm_present=atm_present)
-    print *, "ATM PRESENT:", atm_present
     if (.not. atm_present) then
       !Calcualte next radiation calendar day (since atm model did not run to set this)
       !DMR:  NOTE this assumes a no-leap calendar and equal input/model timesteps
@@ -461,8 +460,6 @@ contains
     write(rdate,'(i4.4,"-",i2.2,"-",i2.2,"-",i5.5)') yr_sync,mon_sync,day_sync,tod_sync
     nlend_sync = seq_timemgr_StopAlarmIsOn( EClock )
     rstwr_sync = seq_timemgr_RestartAlarmIsOn( EClock )
-     print *,"sync times:", yr_sync, mon_sync, day_sync, tod_sync
-     print *, "end restart times:", nlend_sync, rstwr_sync
     ! Map MCT to land data type
     ! Perform downscaling if appropriate
 
@@ -478,14 +475,11 @@ contains
     call seq_infodata_GetData( infodata, orb_eccen=eccen, orb_mvelpp=mvelpp, &
          orb_lambm0=lambm0, orb_obliqr=obliqr )
     
-    print *, "doing drv run"
     starttime = mpi_wtime()
     ! Loop over time steps in coupling interval
     dosend = .false.
     step_count = 0
     call getStopDate(stop_step, stop_year, stop_mon, stop_day, stop_tod)
-    print *, "stop info::"
-    print *, stop_step, stop_year, stop_mon, stop_day, stop_tod
 
     do while(.not. dosend)
        ! Determine if dosend
@@ -502,12 +496,13 @@ contains
        call clm_drv(step_count, rstwr, nlend, rdate)
        !
        ! Create l2x_l export state - add river runoff input to l2x_l if appropriate
-       !
-       #ifndef CPL_BYPASS
-        call t_startf ('lc_lnd_export')
-        call lnd_export(bounds, lnd2atm_vars, lnd2glc_vars, l2x_l%rattr)
-        call t_stopf ('lc_lnd_export')
-       #endif
+
+#ifndef CPL_BYPASS
+       call t_startf ('lc_lnd_export')
+       call lnd_export(bounds, lnd2atm_vars, lnd2glc_vars, l2x_l%rattr)
+       call t_stopf ('lc_lnd_export')
+#endif
+
         
        if(step_count > stop_step) then
                dosend = .true.
@@ -518,7 +513,6 @@ contains
     end do
     stoptime = mpi_wtime()
     print *, "TIME FOR CLM DRIVER(seconds):", stoptime-starttime 
-    stop
     ! Check that internal clock is in sync with master clock
 
     call get_curr_date( yr, mon, day, tod, offset=-dtime )
@@ -726,7 +720,6 @@ contains
                 call acc_set_device_num(mod(iam,ngpus),acc_device_nvidia)
 
                 mygpu = acc_get_device_num(acc_device_nvidia)
-                print *, "iam, mygpu: ", iam, mygpu
         end subroutine
 
 end module lnd_comp_mct

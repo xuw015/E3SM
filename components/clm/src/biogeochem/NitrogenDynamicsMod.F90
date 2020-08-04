@@ -460,8 +460,8 @@ contains
          )
 
       call p2c(bounds, num_soilc, filter_soilc, &
-           fert, &
-           fert_to_sminn)
+           fert(bounds%begp:bounds%endp), &
+           fert_to_sminn(bounds%begc:bounds%endc))
 
     end associate
   end subroutine NitrogenFert
@@ -599,8 +599,8 @@ contains
       end do
 
       call p2c(bounds, num_soilc, filter_soilc, &
-           soyfixn, &
-           soyfixn_to_sminn)
+           soyfixn(bounds%begp:bounds%endp), &
+           soyfixn_to_sminn(bounds%begc:bounds%endc))
 
     end associate
 

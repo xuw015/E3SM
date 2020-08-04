@@ -36,8 +36,8 @@ module GapMortalityMod
   public :: readGapMortParams
 
   type, public :: CNGapMortParamsType
-      real(r8):: am     ! mortality rate based on annual rate, fractional mortality (1/yr)
-      real(r8):: k_mort ! coeff. of growth efficiency in mortality equation
+      real(r8), pointer:: am     => null() ! mortality rate based on annual rate, fractional mortality (1/yr)
+      real(r8), pointer:: k_mort => null() ! coeff. of growth efficiency in mortality equation
   end type CNGapMortParamsType
 
   type(CNGapMortParamsType),public ::  CNGapMortParamsInst
@@ -67,7 +67,7 @@ contains
       real(r8)           :: tempr ! temporary to read in constant
       character(len=100) :: tString ! temp. var for reading
       !-----------------------------------------------------------------------
-
+      allocate(CNGapMortParamsInst%am, CNGapMortParamsInst%k_mort)
       tString='r_mort'
       call ncd_io(varname=trim(tString),data=tempr, flag='read', ncid=ncid, readvar=readv)
       if ( .not. readv ) call endrun(msg=trim(errCode)//trim(tString)//errMsg(__FILE__, __LINE__))
@@ -280,9 +280,6 @@ contains
     integer                 , intent(in)    :: num_soilc       ! number of soil columns in filter
     integer                 , intent(in)    :: filter_soilc(:) ! soil column filter
     type(cnstate_type)      , intent(in)    :: cnstate_vars
-    !type(carbonflux_type)   , intent(inout) :: carbonflux_vars
-    !type(nitrogenflux_type) , intent(inout) :: nitrogenflux_vars
-    !type(phosphorusflux_type)  , intent(inout) :: phosphorusflux_vars
     !
     ! !LOCAL VARIABLES:
     integer :: fc,c,pi,p,j               ! indices
