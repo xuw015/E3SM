@@ -41,15 +41,8 @@ module physpkg
   use cam_logfile,     only: iulog
   use camsrfexch,      only: cam_export
 
-  use modal_aero_calcsize,    only: modal_aero_calcsize_init, &
-                                    modal_aero_calcsize_reg, &
-                                    modal_aero_calcsize_sub
-  use modal_aero_wateruptake, only: modal_aero_wateruptake_init, &
-                                    modal_aero_wateruptake_dr, &
-                                    modal_aero_wateruptake_reg
-#ifdef MAML
-  use seq_comm_mct,       only : num_inst_atm
-#endif
+  use modal_aero_calcsize,    only: modal_aero_calcsize_init, modal_aero_calcsize_reg, modal_aero_calcsize_sub
+  use modal_aero_wateruptake, only: modal_aero_wateruptake_init, modal_aero_wateruptake_dr, modal_aero_wateruptake_reg
 
   implicit none
   private
@@ -104,14 +97,6 @@ module physpkg
   logical           :: pergro_test_active= .false.
   logical           :: pergro_mods = .false.
   logical           :: is_cmip6_volc !true if cmip6 style volcanic file is read otherwise false
-#ifdef MAML
-  real(r8) :: shfavg_in(pcols)
-  real(r8) :: lhfavg_in(pcols)
-  real(r8) :: wsxavg_in(pcols)
-  real(r8) :: wsyavg_in(pcols)
-  real(r8) :: snowhlandavg_in(pcols)
-  real(r8) :: factor_xy
-#endif
 
   !======================================================================= 
 contains
@@ -1238,9 +1223,6 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
     integer :: c                                 ! chunk index
     integer :: ncol                              ! number of columns
     integer :: nstep                             ! current timestep number
-#ifdef MAML
-    integer :: i, ii
-#endif
 
 #if (! defined SPMD)
     integer :: mpicom = 0
@@ -1297,11 +1279,7 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
        !! 
 
        if(ieflx_opt>0) then
-#ifdef MAML
-          call check_ieflx_fix(c, ncol, nstep, num_inst_atm,cam_in(c)%shf(:ncol,:))
-#else
           call check_ieflx_fix(c, ncol, nstep, cam_in(c)%shf)
-#endif
        end if
 
        !
@@ -1496,10 +1474,6 @@ subroutine tphysac (ztodt,   cam_in,  &
     real(r8), pointer, dimension(:,:) :: dtcore
     real(r8), pointer, dimension(:,:) :: ast     ! relative humidity cloud fraction 
     logical :: do_clubb_sgs 
-#ifdef MAML
-    real(r8) :: factor_xy    ! for converting from CRM to GCM-level
-    integer  :: ii           ! loop index for CRM
-#endif
 
     !DCAPE-ULL: physics buffer fields to compute tendencies for dcape
     real(r8), pointer, dimension(:,:) :: t_star   ! temperature
@@ -1520,7 +1494,6 @@ subroutine tphysac (ztodt,   cam_in,  &
     !
     lchnk = state%lchnk
     ncol  = state%ncol
-
     nstep = get_nstep()
     
     call phys_getopts( do_clubb_sgs_out       = do_clubb_sgs, &
@@ -1538,8 +1511,7 @@ subroutine tphysac (ztodt,   cam_in,  &
     endif
 
     ! Validate the physics state.
-    if (state_debug_checks) &
-         call physics_state_check(state, name="before tphysac")
+    if (state_debug_checks) call physics_state_check(state, name="before tphysac")
 
     call t_startf('tphysac_init')
     ! Associate pointers with physics buffer fields
@@ -1554,55 +1526,30 @@ subroutine tphysac (ztodt,   cam_in,  &
     call pbuf_get_field(pbuf, cldliqini_idx, cldliqini)
     call pbuf_get_field(pbuf, cldiceini_idx, cldiceini)
 
-    ifld = pbuf_get_index('CLD')
-    call pbuf_get_field(pbuf, ifld, cld, start=(/1,1,itim_old/),kount=(/pcols,pver,1/))
-
-    ifld = pbuf_get_index('AST')
-    call pbuf_get_field(pbuf, ifld, ast, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
+    call pbuf_get_field(pbuf, pbuf_get_index('CLD'), cld, start=(/1,1,itim_old/),kount=(/pcols,pver,1/))
+    call pbuf_get_field(pbuf, pbuf_get_index('AST'), ast, start=(/1,1,itim_old/), kount=(/pcols,pver,1/) )
 
     !
     ! accumulate fluxes into net flux array for spectral dycores
     ! jrm Include latent heat of fusion for snow
     !
-#ifdef MAML
-    !do the average of cam_in surface fluxes over num_inst_atm land instances
-    factor_xy = 1._r8 / dble(num_inst_atm)
-    shfavg_in = 0._r8
-    lhfavg_in = 0._r8
-    wsxavg_in = 0._r8
-    wsyavg_in = 0._r8
-    do i=1,ncol
-       do ii=1,num_inst_atm
-          tend%flx_net(i) = tend%flx_net(i) + (( cam_in%shf(i,ii) +               &
-             ((cam_out%precc(i,ii)  + cam_out%precl(i,ii) ) * latvap*rhoh2o ) +      &
-             ((cam_out%precsc(i,ii) + cam_out%precsl(i,ii)) * latice*rhoh2o )) * factor_xy)
-          shfavg_in(i) = shfavg_in(i) + cam_in%shf(i,ii)*factor_xy
-          lhfavg_in(i) = lhfavg_in(i) + cam_in%lhf(i,ii)*factor_xy
-          wsxavg_in(i) = wsxavg_in(i) + cam_in%wsx(i,ii)*factor_xy
-          wsyavg_in(i) = wsyavg_in(i) + cam_in%wsy(i,ii)*factor_xy
-       end do
-    end do
-#else
     do i=1,ncol
        tend%flx_net(i) = tend%flx_net(i) + cam_in%shf(i) + (cam_out%precc(i) &
             + cam_out%precl(i))*latvap*rhoh2o &
             + (cam_out%precsc(i) + cam_out%precsl(i))*latice*rhoh2o
     end do
-#endif
 
-if (l_tracer_aero) then
+    if (l_tracer_aero) then
 
-    ! emissions of aerosols and gas-phase chemistry constituents at surface
-    call chem_emissions( state, cam_in )
+      ! emissions of aerosols and gas-phase chemistry constituents at surface
+      call chem_emissions( state, cam_in )
 
-end if ! l_tracer_aero
+    end if ! l_tracer_aero
 
     ! get nstep and zero array for energy checker
     zero = 0._r8
     nstep = get_nstep()
     call check_tracers_init(state, tracerint)
-
-!!== KZ_WCON
 
     call check_qflx(state, tend, "PHYAC01", nstep, ztodt, cam_in%cflx(:,1))
 
@@ -1611,55 +1558,46 @@ end if ! l_tracer_aero
 
        ! Check if latent heat flux exceeds the total moisture content of the
        ! lowest model layer, thereby creating negative moisture.
-#ifdef MAML
-       call qneg4('TPHYSAC '       ,lchnk               ,ncol  ,ztodt ,               &
-            num_inst_atm,state%q(1,pver,1),state%rpdel(1,pver) ,cam_in%shf(:,:) ,         &
-            cam_in%lhf(:,:) , cam_in%cflx )
-#else
        call qneg4('TPHYSAC '       ,lchnk               ,ncol  ,ztodt ,               &
             state%q(1,pver,1),state%rpdel(1,pver) ,cam_in%shf ,         &
             cam_in%lhf , cam_in%cflx )
-#endif 
-
     end if 
 #endif
 
     call check_qflx(state, tend, "PHYAC02", nstep, ztodt, cam_in%cflx(:,1))
 
-!!== KZ_WCON
-
     call t_stopf('tphysac_init')
 
-if (l_tracer_aero) then
-    !===================================================
-    ! Source/sink terms for advected tracers.
-    !===================================================
-    call t_startf('adv_tracer_src_snk')
-    ! Test tracers
+    if (l_tracer_aero) then
+      !===================================================
+      ! Source/sink terms for advected tracers.
+      !===================================================
+      call t_startf('adv_tracer_src_snk')
+      ! Test tracers
 
-    call tracers_timestep_tend(state, ptend, cam_in%cflx, cam_in%landfrac, ztodt)      
-    call physics_update(state, ptend, ztodt, tend)
-    call check_tracers_chng(state, tracerint, "tracers_timestep_tend", nstep, ztodt,   &
-         cam_in%cflx)
+      call tracers_timestep_tend(state, ptend, cam_in%cflx, cam_in%landfrac, ztodt)      
+      call physics_update(state, ptend, ztodt, tend)
+      call check_tracers_chng(state, tracerint, "tracers_timestep_tend", nstep, ztodt,   &
+           cam_in%cflx)
 
-    call aoa_tracers_timestep_tend(state, ptend, cam_in%cflx, cam_in%landfrac, ztodt)      
+      call aoa_tracers_timestep_tend(state, ptend, cam_in%cflx, cam_in%landfrac, ztodt)      
 
-    call physics_update(state, ptend, ztodt, tend)
-    call check_tracers_chng(state, tracerint, "aoa_tracers_timestep_tend", nstep, ztodt,   &
-         cam_in%cflx)
+      call physics_update(state, ptend, ztodt, tend)
+      call check_tracers_chng(state, tracerint, "aoa_tracers_timestep_tend", nstep, ztodt,   &
+           cam_in%cflx)
 
-    ! Chemistry calculation
-    if (chem_is_active()) then
-       call chem_timestep_tend(state, ptend, cam_in, cam_out, ztodt, &
-            pbuf,  fh2o, fsds)
-       call physics_update(state, ptend, ztodt, tend)
-       call check_energy_chng(state, tend, "chem", nstep, ztodt, fh2o, zero, zero, zero)
-       call check_tracers_chng(state, tracerint, "chem_timestep_tend", nstep, ztodt, &
-            cam_in%cflx)
-    end if
-    call t_stopf('adv_tracer_src_snk')
+      ! Chemistry calculation
+      if (chem_is_active()) then
+         call chem_timestep_tend(state, ptend, cam_in, cam_out, ztodt, &
+              pbuf,  fh2o, fsds)
+         call physics_update(state, ptend, ztodt, tend)
+         call check_energy_chng(state, tend, "chem", nstep, ztodt, fh2o, zero, zero, zero)
+         call check_tracers_chng(state, tracerint, "chem_timestep_tend", nstep, ztodt, &
+              cam_in%cflx)
+      end if
+      call t_stopf('adv_tracer_src_snk')
 
-end if ! l_tracer_aero
+    end if ! l_tracer_aero
 
     !===================================================
     ! Vertical diffusion/pbl calculation
@@ -1711,13 +1649,8 @@ if (l_rayleigh) then
     if (do_clubb_sgs) then
       call check_energy_chng(state, tend, "vdiff", nstep, ztodt, zero, zero, zero, zero)
     else
-#ifdef MAML
-      call check_energy_chng(state, tend, "vdiff", nstep, ztodt, cam_in%cflx(:,1), zero, &
-           zero, shfavg_in)
-#else
       call check_energy_chng(state, tend, "vdiff", nstep, ztodt, cam_in%cflx(:,1), zero, &
           zero, cam_in%shf)
-#endif
     endif
     
     call check_tracers_chng(state, tracerint, "vdiff", nstep, ztodt, cam_in%cflx)
@@ -1959,18 +1892,13 @@ subroutine tphysbc (ztodt,               &
 
     ! CRM modules
     use crmdims,         only: crm_nz, crm_nx, crm_ny, crm_dx, crm_dy, crm_dt
-    use crm_physics,     only: crm_physics_tend, crm_surface_flux_bypass_tend, &
-                               crm_save_state_tend, crm_recall_state_tend
+    use crm_physics,     only: crm_physics_tend, crm_surface_flux_bypass_tend
     use crm_ecpp_output_module, only: crm_ecpp_output_type
 
 #if defined( ECPP )
    use module_ecpp_ppdriver2,  only: parampollu_driver2
    use module_data_ecpp1,      only: dtstep_pp_input
    use crmclouds_camaerosols,  only: crmclouds_mixnuc_tend
-#endif
-
-#ifdef MAML
-   use seq_comm_mct,       only : num_inst_atm
 #endif
 
     implicit none
@@ -2037,11 +1965,6 @@ subroutine tphysbc (ztodt,               &
     real(r8), pointer, dimension(:,:) :: cld        ! cloud fraction
     real(r8), pointer, dimension(:,:) :: cldo       ! old cloud fraction
 
-!<songxl 2011-09-20----------------------------
-! physics buffer fields to compute tendencies for deep convection scheme
-    real(r8), pointer, dimension(:,:) :: tm1   ! intermediate T between n and n-1 time step
-    real(r8), pointer, dimension(:,:) :: qm1   ! intermediate q between n and n-1 time step
-!>songxl 2011-09-20----------------------------
     character(len=16)  :: deep_scheme      ! Default set in phys_control.F90
 
     ! physics buffer fields for total energy and mass adjustment
@@ -2119,9 +2042,6 @@ subroutine tphysbc (ztodt,               &
     
     ! w holds position of gathered points vs longitude index
     integer :: lengath
-#ifdef MAML
-    integer :: ii
-#endif
 
     real(r8)  :: lcldo(pcols,pver)              !Pass old liqclf from macro_driver to micro_driver
 
@@ -2157,7 +2077,7 @@ subroutine tphysbc (ztodt,               &
     integer                         :: necpp             ! number of GCM time steps in which ECPP is called once
 
 #endif /* ECPP */
-
+    !---------------------------------------------------------------------------
     call phys_getopts( use_MMF_out           = use_MMF )
     call phys_getopts( use_ECPP_out            = use_ECPP)
     call phys_getopts( MMF_microphysics_scheme_out = MMF_microphysics_scheme)
@@ -2176,7 +2096,7 @@ subroutine tphysbc (ztodt,               &
                       ,l_rad_out              = l_rad              &
                       )
     
-    !-----------------------------------------------------------------------
+    !---------------------------------------------------------------------------
     call t_startf('bc_init')
 
     zero = 0._r8
@@ -2189,32 +2109,14 @@ subroutine tphysbc (ztodt,               &
     rtdt = 1._r8/ztodt
 
     nstep = get_nstep()
-#ifdef MAML
-    !do the average of cam_in surface fluxes over num_inst_atm land instances
-    shfavg_in =0._r8
-    lhfavg_in =0._r8
-    wsxavg_in =0._r8
-    wsyavg_in =0._r8
-    snowhlandavg_in =0._r8
-    factor_xy = 1._r8 / dble(num_inst_atm)
-    do i=1,ncol
-       do ii=1,num_inst_atm
-          shfavg_in(i) = shfavg_in(i)+cam_in%shf(i,ii)*factor_xy
-          lhfavg_in(i) = lhfavg_in(i)+cam_in%lhf(i,ii)*factor_xy
-          wsxavg_in(i) = wsxavg_in(i)+cam_in%wsx(i,ii)*factor_xy
-          wsyavg_in(i) = wsyavg_in(i)+cam_in%wsy(i,ii)*factor_xy
-          snowhlandavg_in(i) = snowhlandavg_in(i)+cam_in%snowhland(i,ii)*factor_xy
-       end do
-    end do
-#endif
 
     if (pergro_test_active) then 
-       !call outfld calls
-       do ihist = 1 , nvars_prtrb_hist
-          vsuffix  = trim(adjustl(hist_vars(ihist)))
-          varname  = trim(adjustl(vsuffix))//'_topphysbc' ! form variable name
-          call outfld( trim(adjustl(varname)),get_var(state,vsuffix), pcols , lchnk )
-       enddo
+      !call outfld calls
+      do ihist = 1 , nvars_prtrb_hist
+        vsuffix  = trim(adjustl(hist_vars(ihist)))
+        varname  = trim(adjustl(vsuffix))//'_topphysbc' ! form variable name
+        call outfld( trim(adjustl(varname)),get_var(state,vsuffix), pcols , lchnk )
+      enddo
     endif
 
     static_ener_ac_idx = pbuf_get_index('static_ener_ac')
@@ -2247,27 +2149,12 @@ subroutine tphysbc (ztodt,               &
        call outfld('DTENDTQ', CIDiff, pcols, lchnk )
     end if
 
+    !---------------------------------------------------------------------------
     ! Associate pointers with physics buffer fields
     itim_old = pbuf_old_tim_idx()
     ifld = pbuf_get_index('CLD')
     call pbuf_get_field(pbuf, ifld, cld, (/1,1,itim_old/),(/pcols,pver,1/))
-
-!<songxl 2011-09-20---------------------------
-!   if(trigmem)then
-#ifdef USE_UNICON
-#else
-    if (deep_scheme.eq.'ZM') then
-      ifld = pbuf_get_index('TM1')
-      call pbuf_get_field(pbuf, ifld, tm1, (/1,1/),(/pcols,pver/))
-      ifld = pbuf_get_index('QM1')
-      call pbuf_get_field(pbuf, ifld, qm1, (/1,1/),(/pcols,pver/))
-    end if
-#endif
-!   endif
-!>songxl 2011-09-20---------------------------
-
     call pbuf_get_field(pbuf, teout_idx, teout, (/1,itim_old/), (/pcols,1/))
-
     call pbuf_get_field(pbuf, tini_idx, tini)
     call pbuf_get_field(pbuf, qini_idx, qini)
     call pbuf_get_field(pbuf, cldliqini_idx, cldliqini)
@@ -2280,105 +2167,72 @@ subroutine tphysbc (ztodt,               &
     call pbuf_get_field(pbuf, ifld, fracis, start=(/1,1,1/), kount=(/pcols, pver, pcnst/)  )
     fracis (:ncol,:,1:pcnst) = 1._r8
 
+    !---------------------------------------------------------------------------
     ! Set physics tendencies to 0
     tend %dTdt(:ncol,:pver)  = 0._r8
     tend %dudt(:ncol,:pver)  = 0._r8
     tend %dvdt(:ncol,:pver)  = 0._r8
 
-!!== KZ_WCON
     call check_qflx (state, tend, "PHYBC01", nstep, ztodt, cam_in%cflx(:,1))
     call check_water(state, tend, "PHYBC01", nstep, ztodt)
 
 #if defined(MMF_FLUX_BYPASS)
     if(.not.use_qqflx_fixer) then 
-       ! Check if latent heat flux exceeds the total moisture content of the
-       ! lowest model layer, thereby creating negative moisture.
-#ifdef MAML
-       call qneg4('TPHYSBC '       ,lchnk               ,ncol  ,ztodt ,               &
-            num_inst_atm,state%q(1,pver,1),state%rpdel(1,pver) ,cam_in%shf(:,:) ,         &
-            cam_in%lhf(:,:) , cam_in%cflx )
-#else
-       call qneg4('TPHYSBC '       ,lchnk               ,ncol  ,ztodt ,               &
-            state%q(1,pver,1),state%rpdel(1,pver) ,cam_in%shf ,         &
-            cam_in%lhf , cam_in%cflx )
-#endif
+      ! Check if latent heat flux exceeds the total moisture content of the
+      ! lowest model layer, thereby creating negative moisture.
+      call qneg4('TPHYSBC '       ,lchnk               ,ncol  ,ztodt ,        &
+                  state%q(1,pver,1),state%rpdel(1,pver) ,cam_in%shf ,         &
+                  cam_in%lhf , cam_in%cflx )
     end if 
 #endif
 
     if(use_mass_borrower) then 
 
-      !! printout diagnostic information
-      !!.................................................................
+      ! printout diagnostic information
        call qneg3('TPHYSBCb',lchnk  ,ncol    ,pcols   ,pver    , &
             1, pcnst, qmin  ,state%q, .False.)
 
-      !! tracer borrower for mass conservation 
-      !!.................................................................
-
+      ! tracer borrower for mass conservation 
        do m = 1, pcnst 
           call massborrow("PHYBC01",lchnk,ncol,state%psetcols,m,m,qmin(m),state%q(1,1,m),state%pdel)
        end do
 
-!!      call qneg3('TPHYSBCb',lchnk  ,ncol    ,pcols   ,pver    , &
-!!           1, pcnst, qmin  ,state%q, .True. )
     else
+      ! original fixer to make sure tracers are all positive
+      call qneg3('TPHYSBCb',lchnk, ncol, pcols, pver, 1, pcnst, qmin, state%q, .True. )
 
-      !! original fixer to make sure tracers are all positive
-      !!.................................................................
-
-      call qneg3('TPHYSBCb',lchnk  ,ncol    ,pcols   ,pver    , &
-           1, pcnst, qmin  ,state%q, .True. )
-
-    end if 
-
-!!== KZ_WCON
+    end if ! use_mass_borrower
 
     ! Validate state coming from the dynamics.
-    if (state_debug_checks) &
-         call physics_state_check(state, name="before tphysbc (dycore?)")
+    if (state_debug_checks) call physics_state_check(state, name="before tphysbc (dycore?)")
 
     call clybry_fam_adj( ncol, lchnk, map2chm, state%q, pbuf )
 
-!!== KZ_WCON
-
     if(use_mass_borrower) then
 
-       !! if use_mass_borrower = True, only printout diagnostic information
-       !!.................................................................
-
+       ! if use_mass_borrower = True, only printout diagnostic information
        call qneg3('TPHYSBCc',lchnk  ,ncol    ,pcols   ,pver    , &
             1, pcnst, qmin  ,state%q, .False. )
 
-       !! tracer borrower for mass conservation 
-       !!.................................................................
+       ! tracer borrower for mass conservation 
        do m = 1, pcnst
           call massborrow("PHYBC02",lchnk,ncol,state%psetcols,m,m,qmin(m),state%q(1,1,m),state%pdel)
        end do
 
-!!       call qneg3('TPHYSBCc',lchnk  ,ncol    ,pcols   ,pver    , &
-!!            1, pcnst, qmin  ,state%q, .True. )
-
     else
 
-       !! original fixer to make sure tracers are all positive
-       !!.................................................................
+       ! original fixer to make sure tracers are all positive
+       call qneg3('TPHYSBCc', lchnk, ncol, pcols, pver,1, pcnst, qmin, state%q, .True. )
 
-       call qneg3('TPHYSBCc',lchnk  ,ncol    ,pcols   ,pver    , &
-            1, pcnst, qmin  ,state%q, .True. )
-
-    end if
-
+    end if ! use_mass_borrower
 
     call check_water(state, tend, "PHYBC02", nstep, ztodt)
-!!== KZ_WCON
 
     ! Validate output of clybry_fam_adj.
     if (state_debug_checks) &
          call physics_state_check(state, name="clybry_fam_adj")
 
-    !
     ! Dump out "before physics" state
-    !
     call diag_state_b4_phys_write (state)
 
     ! compute mass integrals of input tracers state
@@ -2386,402 +2240,79 @@ subroutine tphysbc (ztodt,               &
 
     call t_stopf('bc_init')
 
-    !===================================================
+    !---------------------------------------------------------------------------
     ! Global mean total energy fixer
-    !===================================================
-if (l_bc_energy_fix) then
+    !---------------------------------------------------------------------------
+    if (l_bc_energy_fix) then
 
-    call t_startf('energy_fixer')
+      call t_startf('energy_fixer')
 
-    tini(:ncol,:pver) = state%t(:ncol,:pver)
-    if (dycore_is('LR') .or. dycore_is('SE'))  then
-       call check_energy_fix(state, ptend, nstep, flx_heat)
-       call physics_update(state, ptend, ztodt, tend)
-       call check_energy_chng(state, tend, "chkengyfix", nstep, ztodt, zero, zero, zero, flx_heat)
-    end if
-    ! Save state for convective tendency calculations.
-    call diag_conv_tend_ini(state, pbuf)
+      tini(:ncol,:pver) = state%t(:ncol,:pver)
+      if (dycore_is('LR') .or. dycore_is('SE'))  then
+        call check_energy_fix(state, ptend, nstep, flx_heat)
+        call physics_update(state, ptend, ztodt, tend)
+        call check_energy_chng(state, tend, "chkengyfix", nstep, ztodt, zero, zero, zero, flx_heat)
+      end if
+      ! Save state for convective tendency calculations.
+      call diag_conv_tend_ini(state, pbuf)
 
-    call cnst_get_ind('CLDLIQ', ixcldliq)
-    call cnst_get_ind('CLDICE', ixcldice)
-    qini     (:ncol,:pver) = state%q(:ncol,:pver,       1)
-    cldliqini(:ncol,:pver) = state%q(:ncol,:pver,ixcldliq)
-    cldiceini(:ncol,:pver) = state%q(:ncol,:pver,ixcldice)
+      call cnst_get_ind('CLDLIQ', ixcldliq)
+      call cnst_get_ind('CLDICE', ixcldice)
+      qini     (:ncol,:pver) = state%q(:ncol,:pver,       1)
+      cldliqini(:ncol,:pver) = state%q(:ncol,:pver,ixcldliq)
+      cldiceini(:ncol,:pver) = state%q(:ncol,:pver,ixcldice)
 
+      call outfld('TEOUT', teout       , pcols, lchnk   )
+      call outfld('TEINP', state%te_ini, pcols, lchnk   )
+      call outfld('TEFIX', state%te_cur, pcols, lchnk   )
 
-    call outfld('TEOUT', teout       , pcols, lchnk   )
-    call outfld('TEINP', state%te_ini, pcols, lchnk   )
-    call outfld('TEFIX', state%te_cur, pcols, lchnk   )
-
-    ! set and output the dse change due to dynpkg
-    if( nstep > dyn_time_lvls-1 ) then
-       do k = 1,pver
+      ! set and output the dse change due to dynpkg
+      if( nstep > dyn_time_lvls-1 ) then
+        do k = 1,pver
           dtcore(:ncol,k) = (tini(:ncol,k) - dtcore(:ncol,k))/(ztodt) + tend%dTdt(:ncol,k)
-       end do
-       call outfld( 'DTCORE', dtcore, pcols, lchnk )
-    end if
+        end do
+        call outfld( 'DTCORE', dtcore, pcols, lchnk )
+      end if
 
-    call t_stopf('energy_fixer')
+      call t_stopf('energy_fixer')
 
-end if
-    !
-    !===================================================
-    ! Dry adjustment
-    ! This code block is not a good example of interfacing a parameterization
-    !===================================================
-if (l_dry_adj) then
+    end if ! l_bc_energy_fix
 
-    call t_startf('dry_adjustment')
+   !============================================================================
+   ! Dry adjustment
+   !============================================================================
+   if (l_dry_adj) then
 
-    ! Copy state info for input to dadadj
-    ! This is a kludge, so that dadadj does not have to be correctly reformulated in dry static energy
+      call t_startf('dry_adjustment')
 
-    lq(:) = .FALSE.
-    lq(1) = .TRUE.
-    call physics_ptend_init(ptend, state%psetcols, 'dadadj', ls=.true., lq=lq)
-    ptend%s(:ncol,:pver)   = state%t(:ncol,:pver)
-    ptend%q(:ncol,:pver,1) = state%q(:ncol,:pver,1)
+      ! Copy state info for input to dadadj
+      ! This is a kludge, so that dadadj does not have to be correctly reformulated in dry static energy
 
-    call dadadj (lchnk, ncol, state%pmid,  state%pint,  state%pdel,  &
-         ptend%s, ptend%q(1,1,1))
-    ptend%s(:ncol,:)   = (ptend%s(:ncol,:)   - state%t(:ncol,:)  )/ztodt * cpair
-    ptend%q(:ncol,:,1) = (ptend%q(:ncol,:,1) - state%q(:ncol,:,1))/ztodt
-    call physics_update(state, ptend, ztodt, tend)
+      lq(:) = .FALSE.
+      lq(1) = .TRUE.
+      call physics_ptend_init(ptend, state%psetcols, 'dadadj', ls=.true., lq=lq)
 
-    call t_stopf('dry_adjustment')
+      ptend%s(:ncol,:pver)   = state%t(:ncol,:pver)
+      ptend%q(:ncol,:pver,1) = state%q(:ncol,:pver,1)
 
-end if
+      call dadadj (lchnk, ncol, state%pmid, state%pint,state%pdel,  ptend%s, ptend%q(1,1,1))
 
-  
-    !===================================================
-    ! Save state to recall or CRM call
-    !===================================================  
-    if (use_MMF) call crm_save_state_tend(state, tend, pbuf)
+      ptend%s(:ncol,:)   = (ptend%s(:ncol,:)   - state%t(:ncol,:)  )/ztodt * cpair
+      ptend%q(:ncol,:,1) = (ptend%q(:ncol,:,1) - state%q(:ncol,:,1))/ztodt
 
-    !
-    !===================================================
-    ! Moist convection
-    !===================================================
-    call t_startf('moist_convection')
-    !
-    ! Since the PBL doesn't pass constituent perturbations, they
-    ! are zeroed here for input to the moist convection routine
-    !
+      call physics_update(state, ptend, ztodt, tend)
 
-    call t_startf ('convect_deep_tend')
-    call convect_deep_tend(  &
-         cmfmc,      cmfcme,             &
-         dlf,        pflx,    zdu,       &
-         rliq,    &
-         ztodt,   &
-         state,   ptend, cam_in%landfrac, pbuf, mu, eu, du, md, ed, dp,   &
-         dsubcld, jt, maxg, ideep, lengath) 
-    call t_stopf('convect_deep_tend')
+      call t_stopf('dry_adjustment')
 
-    call physics_update(state, ptend, ztodt, tend)
+   end if ! l_dry_adj
 
-    call pbuf_get_field(pbuf, prec_dp_idx, prec_dp )
-    call pbuf_get_field(pbuf, snow_dp_idx, snow_dp )
-    call pbuf_get_field(pbuf, prec_sh_idx, prec_sh )
-    call pbuf_get_field(pbuf, snow_sh_idx, snow_sh )
-    call pbuf_get_field(pbuf, prec_str_idx, prec_str)
-    call pbuf_get_field(pbuf, snow_str_idx, snow_str)
-    call pbuf_get_field(pbuf, prec_sed_idx, prec_sed)
-    call pbuf_get_field(pbuf, snow_sed_idx, snow_sed)
-    call pbuf_get_field(pbuf, prec_pcw_idx, prec_pcw )
-    call pbuf_get_field(pbuf, snow_pcw_idx, snow_pcw )
-
-    if (use_subcol_microp) then
-      call pbuf_get_field(pbuf, prec_str_idx, prec_str_sc, col_type=col_type_subcol)
-      call pbuf_get_field(pbuf, snow_str_idx, snow_str_sc, col_type=col_type_subcol)
-    end if
-
-    ! Check energy integrals, including "reserved liquid"
-    flx_cnd(:ncol) = prec_dp(:ncol) + rliq(:ncol)
-    call check_energy_chng(state, tend, "convect_deep", nstep, ztodt, zero, flx_cnd, snow_dp, zero)
-
-    !
-    ! Call Hack (1994) convection scheme to deal with shallow/mid-level convection
-    !
-    call t_startf ('convect_shallow_tend')
-
-    call convect_shallow_tend (ztodt   , cmfmc,  cmfmc2  ,&
-         dlf        , dlf2   ,  rliq   , rliq2, & 
-         state      , ptend  ,  pbuf   , sh_e_ed_ratio   , sgh, sgh30, cam_in) 
-    call t_stopf ('convect_shallow_tend')
-
-    call physics_update(state, ptend, ztodt, tend)
-
-    flx_cnd(:ncol) = prec_sh(:ncol) + rliq2(:ncol)
-    call check_energy_chng(state, tend, "convect_shallow", nstep, ztodt, zero, flx_cnd, snow_sh, zero)
-
-    call check_tracers_chng(state, tracerint, "convect_shallow", nstep, ztodt, zero_tracers)
-
-    call t_stopf('moist_convection')
-
-if (l_tracer_aero) then
-
-    ! Rebin the 4-bin version of sea salt into bins for coarse and accumulation
-    ! modes that correspond to the available optics data.  This is only necessary
-    ! for CAM-RT.  But it's done here so that the microphysics code which is called
-    ! from the stratiform interface has access to the same aerosols as the radiation
-    ! code.
-    call sslt_rebin_adv(pbuf,  state)
-
-end if
-
-
-    if( microp_scheme == 'RK' ) then
-
-     if (l_st_mac.or.l_st_mic) then
-       !===================================================
-       ! Calculate stratiform tendency (sedimentation, detrain, cloud fraction and microphysics )
-       !===================================================
-       call t_startf('stratiform_tend')
-
-       call stratiform_tend(state, ptend, pbuf, ztodt, &
-            cam_in%icefrac, cam_in%landfrac, cam_in%ocnfrac, &
-            landm, cam_in%snowhland, & ! sediment
-            dlf, dlf2, & ! detrain
-            rliq  , & ! check energy after detrain
-            cmfmc,   cmfmc2, &
-            cam_in%ts,      cam_in%sst,        zdu)
-
-       call physics_update(state, ptend, ztodt, tend)
-       call check_energy_chng(state, tend, "cldwat_tend", nstep, ztodt, zero, prec_str(:ncol), snow_str(:ncol), zero)
-
-       call t_stopf('stratiform_tend')
-     end if !l_st_mac
-
-    elseif( microp_scheme == 'MG' ) then
-       ! Start co-substepping of macrophysics and microphysics
-       cld_macmic_ztodt = ztodt/cld_macmic_num_steps
-
-       ! Clear precip fields that should accumulate.
-       prec_sed_macmic = 0._r8
-       snow_sed_macmic = 0._r8
-       prec_pcw_macmic = 0._r8
-       snow_pcw_macmic = 0._r8
-
-       do macmic_it = 1, cld_macmic_num_steps
-
-        if (l_st_mac) then
-
-          if (micro_do_icesupersat) then 
-
-            !===================================================
-            ! Aerosol Activation
-            !===================================================
-            call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo, species_class)
-            call t_stopf('microp_aero_run')
-
-            call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)
-
-            call physics_update(state, ptend, ztodt, tend)
-            call check_energy_chng(state, tend, "mp_aero_tend", nstep, ztodt, zero, zero, zero, zero)      
-
-          endif
-          !===================================================
-          ! Calculate macrophysical tendency (sedimentation, detrain, cloud fraction)
-          !===================================================
-
-          call t_startf('macrop_tend')
-
-          ! don't call Park macrophysics if CLUBB is called
-          if (macrop_scheme .ne. 'CLUBB_SGS') then
-
-             call macrop_driver_tend( &
-                  state,           ptend,          cld_macmic_ztodt, &
-                  cam_in%landfrac, cam_in%ocnfrac, cam_in%snowhland, & ! sediment
-                  dlf,             dlf2,                             & ! detrain
-                  cmfmc,           cmfmc2,                           &
-                  cam_in%ts,       cam_in%sst,     zdu,              &
-                  pbuf,            det_s,          det_ice,          &
-                  lcldo)
-
-             !  Since we "added" the reserved liquid back in this routine, we need 
-             !    to account for it in the energy checker
-             flx_cnd(:ncol) = -1._r8*rliq(:ncol) 
-             flx_heat(:ncol) = det_s(:ncol)
-
-             ! Unfortunately, physics_update does not know what time period
-             ! "tend" is supposed to cover, and therefore can't update it
-             ! with substeps correctly. For now, work around this by scaling
-             ! ptend down by the number of substeps, then applying it for
-             ! the full time (ztodt).
-             call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)          
-             call physics_update(state, ptend, ztodt, tend)
-             call check_energy_chng(state, tend, "macrop_tend", nstep, ztodt, &
-                  zero, flx_cnd/cld_macmic_num_steps, &
-                  det_ice/cld_macmic_num_steps, flx_heat/cld_macmic_num_steps)
-       
-          else ! Calculate CLUBB macrophysics
-
-
-!!== KZ_WATCON 
-
-    !! qqflx fixer to avoid negative water vapor in the surface layer
-    !! due to strong negative qflx  
-    !!.................................................................
-
-    if(use_qqflx_fixer) then
-#ifdef MAML
-       call qqflx_fixer('TPHYSBC ', lchnk, ncol, cld_macmic_ztodt, &
-            state%q(1,1,1), state%rpdel(1,1), shfavg_in(:ncol), &
-            lhfavg_in(:ncol) , cam_in%cflx/cld_macmic_num_steps )
-#else
-       call qqflx_fixer('TPHYSBC ', lchnk, ncol, cld_macmic_ztodt, &
-            state%q(1,1,1), state%rpdel(1,1), cam_in%shf, &
-            cam_in%lhf , cam_in%cflx/cld_macmic_num_steps )
-#endif
-
-    end if
-!!== KZ_WATCON 
-
-             ! =====================================================
-             !    CLUBB call (PBL, shallow convection, macrophysics)
-             ! =====================================================  
-   
-             call clubb_tend_cam(state,ptend,pbuf,cld_macmic_ztodt,&
-                cmfmc, cam_in, sgh30, macmic_it, cld_macmic_num_steps, & 
-                dlf, det_s, det_ice, lcldo)
-
-                !  Since we "added" the reserved liquid back in this routine, we need 
-                !    to account for it in the energy checker
-                flx_cnd(:ncol) = -1._r8*rliq(:ncol)
-#ifdef MAML
-                flx_heat(:ncol) = shfavg_in(:ncol) + det_s(:ncol)
-#else
-                flx_heat(:ncol) = cam_in%shf(:ncol) + det_s(:ncol)
-#endif
-
-                ! Unfortunately, physics_update does not know what time period
-                ! "tend" is supposed to cover, and therefore can't update it
-                ! with substeps correctly. For now, work around this by scaling
-                ! ptend down by the number of substeps, then applying it for
-                ! the full time (ztodt).
-                call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)
-                !    Update physics tendencies and copy state to state_eq, because that is 
-                !      input for microphysics              
-                call physics_update(state, ptend, ztodt, tend)
-                call check_energy_chng(state, tend, "clubb_tend", nstep, ztodt, &
-                     cam_in%cflx(:,1)/cld_macmic_num_steps, flx_cnd/cld_macmic_num_steps, &
-                     det_ice/cld_macmic_num_steps, flx_heat/cld_macmic_num_steps)
- 
-          endif
-
-          call t_stopf('macrop_tend')
-        end if ! l_st_mac
-
-          !===================================================
-          ! Calculate cloud microphysics 
-          !===================================================
-        if (l_st_mic) then
-
-          if (is_subcol_on()) then
-             ! Allocate sub-column structures. 
-             call physics_state_alloc(state_sc, lchnk, psubcols*pcols)
-             call physics_tend_alloc(tend_sc, psubcols*pcols)
-
-             ! Generate sub-columns using the requested scheme
-             call subcol_gen(state, tend, state_sc, tend_sc, pbuf)
-
-             !Initialize check energy for subcolumns
-             call check_energy_timestep_init(state_sc, tend_sc, pbuf, col_type_subcol)
-          end if
-
-          if (.not. micro_do_icesupersat) then 
-
-            call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo, species_class)
-            call t_stopf('microp_aero_run')
-
-          endif
-
-          call t_startf('microp_tend')
-
-
-          if (use_subcol_microp) then
-             call microp_driver_tend(state_sc, ptend_sc, cld_macmic_ztodt, pbuf)
-
-             ! Average the sub-column ptend for use in gridded update - will not contain ptend_aero
-             call subcol_ptend_avg(ptend_sc, state_sc%ngrdcol, lchnk, ptend)
-
-             ! Copy ptend_aero field to one dimensioned by sub-columns before summing with ptend
-             call subcol_ptend_copy(ptend_aero, state_sc, ptend_aero_sc)
-             call physics_ptend_sum(ptend_aero_sc, ptend_sc, state_sc%ncol)
-             call physics_ptend_dealloc(ptend_aero_sc)
-
-             ! Have to scale and apply for full timestep to get tend right
-             ! (see above note for macrophysics).
-             call physics_ptend_scale(ptend_sc, 1._r8/cld_macmic_num_steps, ncol)
-
-             call physics_update (state_sc, ptend_sc, ztodt, tend_sc)
-             call check_energy_chng(state_sc, tend_sc, "microp_tend_subcol", &
-                  nstep, ztodt, zero_sc, prec_str_sc(:ncol)/cld_macmic_num_steps, &
-                  snow_str_sc(:ncol)/cld_macmic_num_steps, zero_sc)
-
-             call physics_state_dealloc(state_sc)
-             call physics_tend_dealloc(tend_sc)
-             call physics_ptend_dealloc(ptend_sc)
-          else
-             call microp_driver_tend(state, ptend, cld_macmic_ztodt, pbuf)
-          end if
-          ! combine aero and micro tendencies for the grid
-          if (.not. micro_do_icesupersat) then
-             call physics_ptend_sum(ptend_aero, ptend, ncol)
-             call physics_ptend_dealloc(ptend_aero)
-          endif
-
-          ! Have to scale and apply for full timestep to get tend right
-          ! (see above note for macrophysics).
-          call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)
-
-          call physics_update (state, ptend, ztodt, tend)
-          call check_energy_chng(state, tend, "microp_tend", nstep, ztodt, &
-               zero, prec_str(:ncol)/cld_macmic_num_steps, &
-               snow_str(:ncol)/cld_macmic_num_steps, zero)
-
-          call t_stopf('microp_tend')
-
-        else 
-        ! If microphysics is off, set surface cloud liquid/ice and rain/snow fluxes to zero
-
-          prec_sed = 0._r8
-          snow_sed = 0._r8
-          prec_pcw = 0._r8
-          snow_pcw = 0._r8
-
-        end if ! l_st_mic
-
-          prec_sed_macmic(:ncol) = prec_sed_macmic(:ncol) + prec_sed(:ncol)
-          snow_sed_macmic(:ncol) = snow_sed_macmic(:ncol) + snow_sed(:ncol)
-          prec_pcw_macmic(:ncol) = prec_pcw_macmic(:ncol) + prec_pcw(:ncol)
-          snow_pcw_macmic(:ncol) = snow_pcw_macmic(:ncol) + snow_pcw(:ncol)
-
-       end do ! end substepping over macrophysics/microphysics
-
-       prec_sed(:ncol) = prec_sed_macmic(:ncol)/cld_macmic_num_steps
-       snow_sed(:ncol) = snow_sed_macmic(:ncol)/cld_macmic_num_steps
-       prec_pcw(:ncol) = prec_pcw_macmic(:ncol)/cld_macmic_num_steps
-       snow_pcw(:ncol) = snow_pcw_macmic(:ncol)/cld_macmic_num_steps
-       prec_str(:ncol) = prec_pcw(:ncol) + prec_sed(:ncol)
-       snow_str(:ncol) = snow_pcw(:ncol) + snow_sed(:ncol)
-
-     end if !microp_scheme
-
-   !================================================================================================
-   !------------------------------------------------------------------------------------------------
+   !============================================================================
+   !----------------------------------------------------------------------------
    ! CRM Physics
-   !------------------------------------------------------------------------------------------------
-   !================================================================================================
+   !----------------------------------------------------------------------------
+   !============================================================================
    if (use_MMF) then
       crm_run_time = ztodt
-      !-------------------------------------------------------------------------
-      ! Recall the state after dynamics
-      !-------------------------------------------------------------------------
-      call crm_recall_state_tend(state, tend, pbuf)
 
       !-------------------------------------------------------------------------
       ! Apply surface fluxes if using MMF_FLUX_BYPASS
@@ -2894,9 +2425,9 @@ end if
       !-------------------------------------------------------------------------
       !-------------------------------------------------------------------------
    end if ! use_MMF
-   !================================================================================================
-   !------------------------------------------------------------------------------------------------
-   !================================================================================================
+   !============================================================================
+   !----------------------------------------------------------------------------
+   !============================================================================
 
    if (l_tracer_aero) then
       if (use_MMF.and.use_ECPP.and.MMF_microphysics_scheme.eq.'m2005') then
@@ -2928,50 +2459,31 @@ end if
                    sh_e_ed_ratio, mu, md, du, eu, ed, dp, dsubcld,    &
                    jt, maxg, ideep, lengath, species_class,           &
                    cam_out, pbuf, ptend )                               ! outputs
-         end if
-         call physics_update(state, ptend, ztodt, tend)
-
-         ! deep convective aerosol transport
-         call convect_deep_tend_2( state, ptend, ztodt, pbuf, &
-                mu, eu, du, md, ed, dp, dsubcld, jt, maxg,    &
-                ideep, lengath, species_class )
+         end if ! use_MMF
          call physics_update(state, ptend, ztodt, tend)
 
          ! check tracer integrals
          call check_tracers_chng(state, tracerint, "cmfmca", nstep, ztodt,  zero_tracers)
 
-         call t_stopf('tphysbc_aerosols')
+         call t_stopf('bc_aerosols')
 
-      end if
-   end if ! l_tracer_aero
-
-!<songxl 2011-9-20---------------------------------
-   if(deep_scheme.eq.'ZM' .and. trigmem)then
-      do k=1,pver
-        qm1(:ncol,k) = state%q(:ncol,k,1)
-        tm1(:ncol,k) = state%t(:ncol,k)
-      enddo
-   endif
-!>songxl 2011-09-20---------------------------------
-
-    !===================================================
+       endif ! use_MMF.and.use_ECPP
+    end if ! l_tracer_aero
+    
+    !---------------------------------------------------------------------------
     ! Moist physical parameteriztions complete: 
     ! send dynamical variables, and derived variables to history file
-    !===================================================
-
+    !---------------------------------------------------------------------------
     call t_startf('bc_history_write')
     call diag_phys_writeout(state, cam_out%psl)
     call diag_conv(state, ztodt, pbuf)
     call t_stopf('bc_history_write')
 
-    !===================================================
+    !---------------------------------------------------------------------------
     ! Write cloud diagnostics on history file
-    !===================================================
-
+    !---------------------------------------------------------------------------
     call t_startf('bc_cld_diag_history_write')
-
     call cloud_diagnostics_calc(state, pbuf)
-
     call t_stopf('bc_cld_diag_history_write')
 
 if (l_rad) then
