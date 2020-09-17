@@ -1270,7 +1270,13 @@ contains
     
     do t = 1,ntapes
         if(step_count == 0 ) cycle
-        if (mod(step_count,tape(t)%nhtfrq) == 0) transfer_hist = .true.
+        !tape(t)%nhtfrq is 0 by default, i.e. monthly,
+        ! implying step_count NOT evenly
+        if (tape(t)%nhtfrq == 0) then
+            transfer_hist = .true.   ! need more thinking here - there must be a logical varible to do so in original codes
+        else if (mod(step_count,tape(t)%nhtfrq) == 0) then
+            transfer_hist = .true.
+        endif
     end do 
 
     call hist_update_hbuf_gpu(step_count, transfer_hist, nclumps)
