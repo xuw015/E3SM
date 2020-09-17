@@ -130,8 +130,7 @@ module clm_driver
   use clm_instMod            , only : PlantMicKinetics_vars
   use tracer_varcon          , only : is_active_betr_bgc
   use CNEcosystemDynBetrMod  , only : CNEcosystemDynBetr, CNFluxStateBetrSummary
-  use UrbanParamsType        , only : urbanparams_vars
-
+  use UrbanParamsType        , only : urbanparams_vars, urban_hac_int, urban_traffic
   use GridcellType             , only : grc_pp
   use GridcellDataType         , only : grc_cs, c13_grc_cs, c14_grc_cs
   use GridcellDataType         , only : grc_cf, c13_grc_cf, c14_grc_cf
@@ -288,29 +287,25 @@ contains
         idle = idle + 0
         call sleep(1)
     end do
-#if _CUDA
-    istat = cudaDeviceGetLimit(heapsize, cudaLimitMallocHeapSize)
-    !print *, "SETTING Heap Limit from", heapsize
-    heapsize = 10_8*1024_8*1024_8
-    !print *, "TO:",heapsize
-    istat = cudaDeviceSetLimit(cudaLimitMallocHeapSize,heapsize)
-    istat = cudaMemGetInfo(free1, total)
-    !print *, "Free1:",free1
-#endif
     ! Determine processor bounds and clumps for this processor
     call get_proc_bounds(bounds_proc)
     nclumps = get_proc_clumps()
-    !print *, "step:", step_count
     if(step_count == 0 ) then
-      !print *, "transferring data to GPU"
+#if _CUDA
+        istat = cudaDeviceGetLimit(heapsize, cudaLimitMallocHeapSize)
+        heapsize = 189_8*1024_8*1024_8
+        istat = cudaDeviceSetLimit(cudaLimitMallocHeapSize,heapsize)
+        istat = cudaMemGetInfo(free1, total)
+        print *, "Free1:",free1
+#endif
        call init_proc_clump_info()
        !$acc update device( &
-       !$acc        spinup_state            &
+       !$acc        spinup_state             &
        !$acc       , nyears_ad_carbon_only   &
        !$acc       , spinup_mortality_factor &
-       !$acc       , carbon_only &
-       !$acc       , carbonphosphorus_only &
-       !$acc       , carbonnitrogen_only &
+       !$acc       , carbon_only             &
+       !$acc       , carbonphosphorus_only   &
+       !$acc       , carbonnitrogen_only     &
        !$acc       ,use_crop            &
        !$acc       ,use_snicar_frc      &
        !$acc       ,use_snicar_ad       &
@@ -318,15 +313,17 @@ contains
        !$acc       ,use_mexicocity      &
        !$acc       ,use_noio            &
        !$acc       ,use_var_soil_thick  &
-       !$acc       ,NFIX_PTASE_plant &
-       !$acc       ,tw_irr &
-       !$acc       ,use_erosion &
-       !$acc       ,ero_ccycle  &
-       !$acc       ,anoxia &
-       !$acc       , glc_do_dynglacier &
-       !$acc       , all_active &
-       !$acc       , co2_ppmv &
+       !$acc       ,NFIX_PTASE_plant    &
+       !$acc       ,tw_irr              &
+       !$acc       ,use_erosion         &
+       !$acc       ,ero_ccycle          & 
+       !$acc       ,anoxia              &
+       !$acc       , glc_do_dynglacier  &
+       !$acc       , all_active         &
+       !$acc       , co2_ppmv           &
        !$acc       , const_climate_hist &
+       !$acc       , urban_hac_int      &
+       !$acc       , urban_traffic      &
        !$acc     )
        !$acc update device(first_step, nlevgrnd, eccen, obliqr, lambm0, mvelpp )
        call update_acc_variables()
@@ -785,10 +782,12 @@ contains
     ! snow accumulation exceeds 10 mm.
     ! ============================================================================
 
-
-    !print *, "main (5th) loop"
-
-   !$acc parallel vector_length(32) default(present)
+#if _CUDA
+    if(step_count == 16) then
+       call cudaProfilerStart()
+    end if
+#endif
+   !$acc parallel  default(present)
 
     !$acc loop independent gang private(nc, bounds_clump)
     do nc = 1,nclumps
@@ -874,6 +873,7 @@ contains
        ! non-bareground fluxes for all patches except lakes and urban landunits
        ! Calculate canopy temperature, latent and sensible fluxes from the canopy,
        ! and leaf water change by evapotranspiration
+       !call t_startf('canflux')
        call CanopyFluxes(bounds_clump,                                                   &
                 filter(nc)%num_nolakeurbanp, filter(nc)%nolakeurbanp,                        &
                 atm2lnd_vars, canopystate_vars, cnstate_vars, energyflux_vars,               &
@@ -918,6 +918,7 @@ contains
                   filter(nc)%num_lakep, filter(nc)%lakep,  &
                   solarabs_vars, soilstate_vars, ch4_vars, &
                   energyflux_vars, lakestate_vars, dtime_mod)
+       !call t_stopf('bgplake')
        ! Set soil/snow temperatures including ground temperature
        call SoilTemperature(bounds_clump,                            &
                    filter(nc)%num_urbanl  , filter(nc)%urbanl,       &
@@ -1153,9 +1154,6 @@ contains
        if (.not. use_fates)then
           if (use_cn) then
              if (nstep_mod < 2 )then
-                if (masterproc) then
-                   write(iulog,*) '--WARNING-- skipping CN balance check for first timestep'
-                end if
              else
 
                 call ColCBalanceCheck(bounds_clump, &
@@ -1252,15 +1250,31 @@ contains
     ! Write global average diagnostics to standard output
     ! ============================================================================
     
+#if _CUDA
+    if(step_count == 16) then
+        call cudaProfilerStop()
+    end if 
+#endif
 
     !!if (wrtdia) call mpi_barrier( mpicom,ier)
+    !!call t_startf('wrtdiag')
     !!call write_diagnostic(bounds_proc, wrtdia, nstep_mod, lnd2atm_vars)
+    !!call t_stopf('wrtdiag')
 
     ! ============================================================================
     ! Update history buffer
     ! ============================================================================
+    !! Currently circular dependency prevents testing to transfer tape_gpu back
+    !! to cpu
+    transfer_hist = .false.
     
-        call hist_update_hbuf_gpu(step_count,transfer_hist, nclumps)
+    do t = 1,ntapes
+        if(step_count == 0 ) cycle
+        if (mod(step_count,tape(t)%nhtfrq) == 0) transfer_hist = .true.
+    end do 
+
+    call hist_update_hbuf_gpu(step_count, transfer_hist, nclumps)
+    
     ! ============================================================================
     ! Compute water budget
     ! ============================================================================
