@@ -1890,8 +1890,6 @@ end subroutine clubb_init_cnst
       upwp_sfc   = cam_in%wsx(i)/rho_ds_zm(1)               ! Surface meridional momentum flux
       vpwp_sfc   = cam_in%wsy(i)/rho_ds_zm(1)               ! Surface zonal momentum flux  
       
-      write(*,*) 'CLUBBSHFFlux ', cam_in%shf(i)
-      
       ! ------------------------------------------------- !
       ! Apply TMS                                         !
       ! ------------------------------------------------- !    
