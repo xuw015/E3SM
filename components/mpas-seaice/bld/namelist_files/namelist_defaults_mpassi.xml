@@ -82,10 +82,13 @@
 <config_calculate_coriolis>true</config_calculate_coriolis>
 
 <!-- use_sections -->
+<config_use_dynamics>true</config_use_dynamics>
 <config_use_velocity_solver>true</config_use_velocity_solver>
 <config_use_advection>true</config_use_advection>
 <config_use_forcing>false</config_use_forcing>
 <config_use_column_package>true</config_use_column_package>
+<config_use_prescribed_ice>false</config_use_prescribed_ice>
+<config_use_prescribed_ice_forcing>false</config_use_prescribed_ice_forcing>
 
 <!-- forcing -->
 <config_atmospheric_forcing_type>'CORE'</config_atmospheric_forcing_type>

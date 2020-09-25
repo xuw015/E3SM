@@ -390,6 +390,14 @@ Default: Defined in namelist_defaults.xml
 
 <!-- use_sections -->
 
+<entry id="config_use_dynamics" type="logical"
+	category="use_sections" group="use_sections">
+If true calculate dynamics.
+
+Valid values: true or .false
+Default: Defined in namelist_defaults.xml
+</entry>
+
 <entry id="config_use_velocity_solver" type="logical"
 	category="use_sections" group="use_sections">
 If true calculate the sea ice velocity.
@@ -417,6 +425,22 @@ Default: Defined in namelist_defaults.xml
 <entry id="config_use_column_package" type="logical"
 	category="use_sections" group="use_sections">
 If true perform calculations from the column physics package.
+
+Valid values: true or .false
+Default: Defined in namelist_defaults.xml
+</entry>
+
+<entry id="config_use_prescribed_ice" type="logical"
+	category="use_sections" group="use_sections">
+If true use prescribed ice mode.
+
+Valid values: true or .false
+Default: Defined in namelist_defaults.xml
+</entry>
+
+<entry id="config_use_prescribed_ice_forcing" type="logical"
+	category="use_sections" group="use_sections">
+If true use prescribed ice mode forcing through the MPAS streams system.
 
 Valid values: true or .false
 Default: Defined in namelist_defaults.xml
