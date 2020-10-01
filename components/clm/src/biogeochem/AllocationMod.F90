@@ -1212,10 +1212,6 @@ contains
          leafp_storage                => veg_ps%leafp_storage            , &
          leafp_xfer                   => veg_ps%leafp_xfer                 &
          )
-
-      ! set time steps
-      !#py dt = real( get_step_size(), r8 )
-
       if (nu_com .eq. 'RD') then ! 'RD' : relative demand approach
 
          !local var = flux_type%var
@@ -4020,7 +4016,6 @@ contains
     integer                  , intent(in)    :: num_soilc        ! number of soil columns in filter
     integer                  , intent(in)    :: filter_soilc(:)  ! filter for soil columns
     type(cnstate_type)       , intent(in)    :: cnstate_vars
-    !type(phosphorusstate_type),intent(in)    :: phosphorusstate_vars
     real(r8)                 , intent(inout) :: puptake_prof(bounds%begc:bounds%endc, 1:nlevdecomp)
 
     integer :: c,j,fc                                            !indices

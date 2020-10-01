@@ -270,7 +270,7 @@ contains
     integer :: k_frz
     real*8    :: sto
 #if _CUDA
-    integer , parameter :: gpu = 1, numdays = 1
+    integer , parameter :: gpu = 1, numdays = 30
     integer(kind=cuda_count_kind) :: heapsize,free1,free2,total
     integer  :: istat, val
 #endif
@@ -1253,6 +1253,7 @@ contains
 #if _CUDA
     if(step_count == 16) then
         call cudaProfilerStop()
+        stop
     end if 
 #endif
 

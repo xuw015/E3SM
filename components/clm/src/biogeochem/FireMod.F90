@@ -1378,7 +1378,7 @@ contains
               end if
               if ( is_cwd(l) ) then
                  m_decomp_npools_to_fire_vr(c,j,l) = decomp_npools_vr(c,j,l) * &
-                      (f-baf_crop(c)) * 0.25_r8
+                      (f-baf_crop_sc) * 0.25_r8
                  if (spinup_state == 1) then
                    m_decomp_npools_to_fire_vr(c,j,l) = m_decomp_npools_to_fire_vr(c,j,l) * &
                      decomp_cascade_con%spinup_factor(l)
@@ -1395,7 +1395,7 @@ contains
               end if
               if ( is_cwd(l) ) then
                  m_decomp_ppools_to_fire_vr(c,j,l) = decomp_ppools_vr(c,j,l) * &
-                      (f-baf_crop(c)) * 0.25_r8
+                      (f-baf_crop_sc) * 0.25_r8
               end if
            end do
 

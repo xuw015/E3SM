@@ -491,6 +491,12 @@ contains
        if (rstwr_sync .and. dosend) rstwr = .true.
        nlend = .false.
        if (nlend_sync .and. dosend) nlend = .true.
+       if(step_count == stop_step) then
+               print *, "SETTING RSTWR TO TRUE"
+               dosend = .true.
+               rstwr  = .true.
+               nlend = .true.
+       end if 
        !
        ! Run clm
        call clm_drv(step_count, rstwr, nlend, rdate)

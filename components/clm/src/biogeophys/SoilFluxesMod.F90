@@ -444,6 +444,9 @@ contains
       call p2c(bounds, num_nolakec, filter_nolakec, &
            errsoi_patch(bounds%begp:bounds%endp), &
            errsoi_col(bounds%begc:bounds%endc))
+     ! call p2c(bounds, num_nolakec, filter_nolakec, &
+     !      errsoi_patch, &
+     !      errsoi_col)
 
       !#py call t_stopf('bgp2_loop_4')
 
