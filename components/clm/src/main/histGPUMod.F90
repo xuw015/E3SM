@@ -231,7 +231,7 @@ contains
 
     !TODO: change inc to be end of hist interval?
     if(transfer_hist ) then
-        print *, "transfering tape to cpu:"
+        !print *, "transfering tape to cpu:"
         call transfer_tape_to_cpu()
     endif
   end subroutine hist_update_hbuf_gpu

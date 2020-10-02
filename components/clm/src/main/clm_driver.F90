@@ -296,7 +296,7 @@ contains
         heapsize = 189_8*1024_8*1024_8
         istat = cudaDeviceSetLimit(cudaLimitMallocHeapSize,heapsize)
         istat = cudaMemGetInfo(free1, total)
-        print *, "Free1:",free1
+        !print *, "Free1:",free1
 #endif
        call init_proc_clump_info()
        !$acc update device( &
@@ -446,7 +446,7 @@ contains
           ! For dry-deposition need to call CLMSP so that mlaidiff is obtained
           if ( n_drydep > 0 .and. drydep_method == DD_XLND ) then
              call t_startf('interpMonthlyVeg')
-             print *, "TURNED OFF INTERPMONTHLYVEG"
+             !print *, "TURNED OFF INTERPMONTHLYVEG"
              !call interpMonthlyVeg(bounds_proc, canopystate_vars)
              call t_stopf('interpMonthlyVeg')
           endif
@@ -459,10 +459,10 @@ contains
           ! weights obtained here are used in subroutine SatellitePhenology to obtain time
           ! interpolated values.
           if (doalb .or. ( n_drydep > 0 .and. drydep_method == DD_XLND )) then
-             print *, "TURNED OFF INTERPMONTHLYVEG"
-              call t_startf('interpMonthlyVeg')
+             !print *, "TURNED OFF INTERPMONTHLYVEG"
+             !call t_startf('interpMonthlyVeg')
              !call interpMonthlyVeg(bounds_proc, canopystate_vars)
-             call t_stopf('interpMonthlyVeg')
+             !call t_stopf('interpMonthlyVeg')
           end if
        end if
     end if
@@ -473,7 +473,7 @@ contains
     call shr_orb_decl(nextsw_cday_mod, eccen, mvelpp, lambm0, obliqr, declinp1, eccf )
     !$acc end serial
     
-   print *, "first loop!"
+   !print *, "first loop!"
   !$acc parallel default(present)
    !$acc loop independent gang private(nc, bounds_clump)
     do nc = 1, nclumps
