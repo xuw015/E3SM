@@ -669,7 +669,7 @@ contains
 
     call ESMF_ClockGet( tm_clock, stopTime=stop_date, startTime=start_date, rc=rc )
     call chkrc(rc, ': error return from ESMF_ClockGet')
-    ntspday = 24
+    ntspday = 86400/dtime
     diff = stop_date - start_date
     call ESMF_TimeIntervalGet( diff, d=ndays, s=nsecs, rc=rc )
     call chkrc(rc, ': error return from ESMF_TimeIntervalGet calculating nestep')

@@ -492,11 +492,16 @@ contains
        nlend = .false.
        if (nlend_sync .and. dosend) nlend = .true.
        if(step_count == stop_step) then
-               print *, "SETTING RSTWR TO TRUE"
-               dosend = .true.
-               rstwr  = .true.
-               nlend = .true.
+           print *, "SETTING RSTWR TO TRUE"
+           dosend = .true.
+           rstwr  = .true.
+           nlend = .true.
        end if 
+
+       if(rstwr) then
+           call get_curr_date(yr, mon, day, tod)
+           write(rdate,'(i4.4,"-",i2.2,"-",i2.2,"-",i5.5)') yr,mon,day,tod
+       end if
        !
        ! Run clm
        call clm_drv(step_count, rstwr, nlend, rdate)
@@ -518,7 +523,7 @@ contains
        call advance_timestep()
     end do
     stoptime = mpi_wtime()
-    print *, "TIME FOR CLM DRIVER(seconds):", stoptime-starttime 
+    if(masterproc) write(iulog,*) 'TIME FOR CLM DRIVER(seconds): ', stoptime-starttime
     ! Check that internal clock is in sync with master clock
 
     call get_curr_date( yr, mon, day, tod, offset=-dtime )
