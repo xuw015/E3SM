@@ -2264,7 +2264,7 @@
       <file grid="atm|lnd" mask="EC30to60E2r2">$DIN_LOC_ROOT/share/domains/domain.lnd.TL319_EC30to60E2r2.201005.nc</file>
       <file grid="ice|ocn" mask="EC30to60E2r2">$DIN_LOC_ROOT/share/domains/domain.ocn.TL319_EC30to60E2r2.201005.nc</file>
       <file grid="atm|lnd" mask="WC14to60E2r3">$DIN_LOC_ROOT/share/domains/domain.lnd.TL319_WC14to60E2r3.200929.nc</file>
-      <file grid="ice/ocn" mask="WC14to60E2r3">$DIN_LOC_ROOT/share/domains/domain.ocn.TL319_WC14to60E2r3.200929.nc</file>
+      <file grid="ice|ocn" mask="WC14to60E2r3">$DIN_LOC_ROOT/share/domains/domain.ocn.TL319_WC14to60E2r3.200929.nc</file>
       <desc>TL319 is JRA lat/lon grid:</desc>
     </domain>
 
