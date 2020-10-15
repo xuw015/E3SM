@@ -2559,7 +2559,7 @@ end if
              call physics_tend_dealloc(tend_sc)
              call physics_ptend_dealloc(ptend_sc)
           else
-             call microp_driver_tend(state, ptend, cld_macmic_ztodt, pbuf)
+             call microp_driver_tend(state, ptend, cld_macmic_ztodt, macmic_it, pbuf)
           end if
           ! combine aero and micro tendencies for the grid
           if (.not. micro_do_icesupersat) then
@@ -2859,35 +2859,55 @@ end subroutine phys_timestep_init
 subroutine add_fld_default_calls()
   !BSINGH -  For adding addfld and add defualt calls
   use cam_history,        only: addfld, add_default, fieldname_len
+  !SZHANG - For adding substepping output
+  use phys_control,     only: phys_getopts
 
   implicit none
 
   !Add all existing ptend names for the addfld calls
-  character(len=20), parameter :: vlist(27) = (/     'topphysbc           '                       ,&
+  character(len=20), parameter :: vlist(23) = (/     'topphysbc           '                       ,&
        'chkenergyfix        ','dadadj              ','zm_convr            ','zm_conv_evap        ',&
-       'momtran             ','zm_conv_tend        ','UWSHCU              ','convect_shallow     ',&
-       'pcwdetrain_mac      ','macro_park          ','macrop              ','micro_mg            ',&
+       'momtran             ','convtran1           ','zm_conv_tend        ','convect_shallow_off ',&
+       'clubb_ice1          ','clubb_det           ','clubb_ice4          ','micro_mg            ',&
        'cldwat_mic          ','aero_model_wetdep_ma','convtran2           ','cam_radheat         ',&
-       'chemistry           ','vdiff               ','rayleigh_friction   ','aero_model_drydep_ma',&
-       'Grav_wave_drag      ','convect_shallow_off ','clubb_ice1          ','clubb_det           ',&
-       'clubb_ice4          ','clubb_srf           ' /)
-
-
+       'chemistry           ','clubb_srf           ','rayleigh_friction   ','aero_model_drydep_ma',&
+       'Grav_wave_drag      ','nudging             '  /)
 
   character(len=fieldname_len) :: varname
   character(len=1000)          :: s_lngname,stend_lngname,qv_lngname,qvtend_lngname,t_lngname
   
   integer :: iv, ntot, ihist
+  integer :: cld_macmic_num_steps
+
+  call phys_getopts(cld_macmic_num_steps_out=cld_macmic_num_steps)
 
   ntot = size(vlist)
 
   do ihist = 1 , nvars_prtrb_hist
      do iv = 1, ntot   
-        
-        varname  = trim(adjustl(hist_vars(ihist)))//'_'//trim(adjustl(vlist(iv))) ! form variable name
 
+       if( trim(adjustl(vlist(iv))).eq."clubb_ice1" .or. &
+           trim(adjustl(vlist(iv))).eq."clubb_det"  .or. &
+           trim(adjustl(vlist(iv))).eq."clubb_ice4" .or. &
+           trim(adjustl(vlist(iv))).eq."micro_mg"   .or. &
+           trim(adjustl(vlist(iv))).eq."cldwat_mic" &
+         ) then
+
+        do imacmic = 1,cld_macmic_num_steps
+          write(substep,"(A3,I2.2)")"sub",it
+          varname  = trim(adjustl(hist_vars(ihist)))//'_'//trim(adjustl(vlist(iv)))//'_'//trim(adjustl(substep))
+          call addfld (trim(adjustl(varname)), (/ 'lev' /), 'A', 'prg_test_units', 'pergro_longname',flag_xyfill=.true.)!The units and longname are dummy as it is for a test only
+          call add_default (trim(adjustl(varname)), 1, ' ')
+        end do 
+
+       else 
+
+        varname  = trim(adjustl(hist_vars(ihist)))//'_'//trim(adjustl(vlist(iv))) ! form variable name
         call addfld (trim(adjustl(varname)), (/ 'lev' /), 'A', 'prg_test_units', 'pergro_longname',flag_xyfill=.true.)!The units and longname are dummy as it is for a test only
         call add_default (trim(adjustl(varname)), 1, ' ')        
+
+       end if 
+
      enddo
   enddo
 
