@@ -2536,7 +2536,7 @@ end if
 
 
           if (use_subcol_microp) then
-             call microp_driver_tend(state_sc, ptend_sc, cld_macmic_ztodt, pbuf)
+             call microp_driver_tend(state_sc, ptend_sc, cld_macmic_ztodt, macmic_it, pbuf)
 
              ! Average the sub-column ptend for use in gridded update - will not contain ptend_aero
              call subcol_ptend_avg(ptend_sc, state_sc%ngrdcol, lchnk, ptend)
@@ -2871,12 +2871,12 @@ subroutine add_fld_default_calls()
        'clubb_ice1          ','clubb_det           ','clubb_ice4          ','micro_mg            ',&
        'cldwat_mic          ','aero_model_wetdep_ma','convtran2           ','cam_radheat         ',&
        'chemistry           ','clubb_srf           ','rayleigh_friction   ','aero_model_drydep_ma',&
-       'Grav_wave_drag      ','nudging             '  /)
+       'Grav_wave_drag      ','nudging             ','convect_shallow     ' /)
 
   character(len=fieldname_len) :: varname
-  character(len=1000)          :: s_lngname,stend_lngname,qv_lngname,qvtend_lngname,t_lngname
+  character(len=1000)          :: s_lngname,stend_lngname,qv_lngname,qvtend_lngname,t_lngname,substep
   
-  integer :: iv, ntot, ihist
+  integer :: iv, ntot, ihist, imacmic
   integer :: cld_macmic_num_steps
 
   call phys_getopts(cld_macmic_num_steps_out=cld_macmic_num_steps)
@@ -2894,7 +2894,7 @@ subroutine add_fld_default_calls()
          ) then
 
         do imacmic = 1,cld_macmic_num_steps
-          write(substep,"(A3,I2.2)")"sub",it
+          write(substep,"(A3,I2.2)")"sub",imacmic
           varname  = trim(adjustl(hist_vars(ihist)))//'_'//trim(adjustl(vlist(iv)))//'_'//trim(adjustl(substep))
           call addfld (trim(adjustl(varname)), (/ 'lev' /), 'A', 'prg_test_units', 'pergro_longname',flag_xyfill=.true.)!The units and longname are dummy as it is for a test only
           call add_default (trim(adjustl(varname)), 1, ' ')
