@@ -1256,7 +1256,7 @@ end subroutine clubb_init_cnst
 
    if (.not. micro_do_icesupersat) then    
     !call physics_ptend_init(ptend_loc,state%psetcols, 'clubb_ice1', ls=.true., lu=.true., lv=.true., lq=lq)
-     write (ptendname, "(A13,I2.2)") "clubb_ice1_sub", macmic_it
+     write (ptendname, "(A14,I2.2)") "clubb_ice1_sub", macmic_it
      call physics_ptend_init(ptend_loc,state%psetcols, trim(adjustl(ptendname)), ls=.true., lu=.true., lv=.true., lq=lq)
    endif
 
@@ -2133,7 +2133,7 @@ end subroutine clubb_init_cnst
    !  Update physics tendencies     
    if (.not. micro_do_icesupersat) then
      !call physics_ptend_init(ptend_all, state%psetcols, 'clubb_ice4')
-      write (ptendname, "(A13,I2.2)") "clubb_ice4_sub", macmic_it
+      write (ptendname, "(A14,I2.2)") "clubb_ice4_sub", macmic_it
       call physics_ptend_init(ptend_all,state%psetcols, trim(adjustl(ptendname)))
    endif
    call physics_ptend_sum(ptend_loc,ptend_all,ncol)
