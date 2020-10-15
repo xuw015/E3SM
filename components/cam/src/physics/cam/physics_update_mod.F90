@@ -27,6 +27,7 @@ module physics_update_mod
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use ppgrid,        only: pcols, pver, begchunk
   use physics_types, only: physics_update_main, physics_ptend, physics_state, physics_tend
+  use wv_saturation, only: qsat, qsat_water, qsat_ice, svp_ice
 
   implicit none
   private
@@ -47,9 +48,11 @@ module physics_update_mod
   !2. If the variable is not present in the constituent array,add a "case" statement for that variable in the "select case" 
   !   construct in get_var function in this module
 
-  integer, public, parameter :: nvars_prtrb_hist = 11
-  character(len=6), public, parameter :: hist_vars(nvars_prtrb_hist) = ['s     ', 't     ', 'Q     ', 'v     ', &
-       'CLDLIQ', 'NUMLIQ', 'CLDICE', 'NUMICE', 'num_a1','num_a2','num_a3']
+  integer, public, parameter :: nvars_prtrb_hist = 14
+  !character(len=6), public, parameter :: hist_vars(nvars_prtrb_hist) = ['s     ', 't     ', 'Q     ', 'v     ', &
+  !     'CLDLIQ', 'NUMLIQ', 'CLDICE', 'NUMICE', 'num_a1','num_a2','num_a3']
+  character(len=6), public, parameter :: hist_vars(nvars_prtrb_hist) = ['t     ', 'Q     ', 'CLDLIQ', 'NUMLIQ', &
+       'CLDICE', 'NUMICE', 'RAINQM','NUMRAI','SNOWQM','NUMSNO','QSW   ','QSI   ', 'RHW   ', 'RHI   ']
   
 contains 
 
@@ -172,6 +175,9 @@ contains
     character(len=fieldname_len), intent(in)  :: hist_var
     type(physics_state),          intent(in)  :: state  
     real(r8)                                  :: prg_var(pcols,pver)
+    real(r8) esl(pcols,pver)   ! saturation vapor pressures 
+    real(r8) esi(pcols,pver)   ! 
+    real(r8) ftem(pcols,pver)  ! temporary workspace
 
     !local vars
     integer :: idx
@@ -192,6 +198,27 @@ contains
           prg_var(1:pcols,1:pver) = state%t(1:pcols,1:pver)
        case('v')
           prg_var(1:pcols,1:pver) = state%v(1:pcols,1:pver)
+       case('QSW')
+         ! calculate from CAM q and t using CAM built-in functions
+         call qsat_water(state%t(1:pcols,1:pver), state%pmid(1:pcols,1:pver), &
+              esl(1:pcols,1:pver), prg_var(1:pcols,1:pver))
+       case('RHW')
+         ! calculate from CAM q and t using CAM built-in functions
+         call qsat_water(state%t(1:pcols,1:pver), state%pmid(1:pcols,1:pver), &
+              esl(1:pcols,1:pver), prg_var(1:pcols,1:pver))
+              prg_var(1:pcols,1:pver) =  state%q(1:pcols,1:pver,1)/prg_var(1:pcols,1:pver) * 100._r8
+       case('QSI')
+         ! calculate from CAM q and t using CAM built-in functions
+         call qsat_ice(state%t(1:pcols,1:pver), state%pmid(1:pcols,1:pver), &
+              esi(1:pcols,1:pver), prg_var(1:pcols,1:pver))
+       case('RHI')
+         ! calculate from CAM q and t using CAM built-in functions
+         call qsat_water(state%t(1:pcols,1:pver), state%pmid(1:pcols,1:pver), &
+              esl(1:pcols,1:pver), ftem(1:pcols,1:pver))
+         ftem(1:pcols,1:pver) = state%q(1:pcols,1:pver,1)/ftem(1:pcols,1:pver) * 100._r8     
+         ! convert to RHI (ice)
+         esi(1:pcols,1:pver)=svp_ice(state%t(1:pcols,1:pver))
+         prg_var(1:pcols,1:pver)=ftem(1:pcols,1:pver)*esl(1:pcols,1:pver)/esi(1:pcols,1:pver)
        case default
           call endrun('physics_update_mod.F90 - func get_var, unrecognized variable: '// trim(adjustl(hist_var)))
        end select
