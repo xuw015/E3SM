@@ -1818,7 +1818,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, macmic_it, pbuf)
    ! the name 'cldwat' triggers special tests on cldliq
    ! and cldice in physics_update
    !call physics_ptend_init(ptend, psetcols, "cldwat_mic", ls=.true., lq=lq)
-    write (ptendname, "(A10,I2.2)") "cldwat_mic", macmic_it
+    write (ptendname, "(A15,I2.2)") "cldwat_mic_sub", macmic_it
     call physics_ptend_init(ptend, psetcols, trim(adjustl(ptendname)), ls=.true., lq=lq)
      
    select case (micro_mg_version)
@@ -2260,7 +2260,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, macmic_it, pbuf)
      !call physics_ptend_init(ptend_loc, psetcols, "micro_mg", &
      !                        ls=.true., lq=lq)
 
-      write (ptendname, "(A10,I2.2)") "micro_mg", macmic_it
+      write (ptendname, "(A15,I2.2)") "micro_mg_sub", macmic_it
       call physics_ptend_init(ptend_loc, psetcols, trim(adjustl(ptendname)), &
                               ls=.true., lq=lq)
 
