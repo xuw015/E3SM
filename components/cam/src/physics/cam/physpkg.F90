@@ -2865,7 +2865,7 @@ subroutine add_fld_default_calls()
   implicit none
 
   !Add all existing ptend names for the addfld calls
-  character(len=20), parameter :: vlist(23) = (/     'topphysbc           '                       ,&
+  character(len=20), parameter :: vlist(24) = (/     'topphysbc           '                       ,&
        'chkenergyfix        ','dadadj              ','zm_convr            ','zm_conv_evap        ',&
        'momtran             ','convtran1           ','zm_conv_tend        ','convect_shallow_off ',&
        'clubb_ice1          ','clubb_det           ','clubb_ice4          ','micro_mg            ',&
