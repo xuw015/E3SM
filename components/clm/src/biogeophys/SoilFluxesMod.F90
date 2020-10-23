@@ -43,8 +43,8 @@ contains
     ! Update surface fluxes based on the new ground temperature
     !
     ! !USES:
-    !#py use clm_time_manager , only : get_step_size
       !$acc routine seq
+    use clm_time_manager , only : get_step_size, get_nstep
     use clm_varcon       , only : hvap, cpair, grav, vkc, tfrz, sb
     use landunit_varcon  , only : istsoil, istcrop
     use column_varcon    , only : icol_roof, icol_sunwall, icol_shadewall, icol_road_perv
