@@ -409,6 +409,7 @@ flags should be captured within MPAS CMake files.
   </SLIBS>
   <SFC>$ENV{FC_ROOT}/bin/pgfortran</SFC>
   <SCC>$ENV{CC_ROOT}/bin/pgcc</SCC>
+  <CPP>$ENV{CC_ROOT}/bin/pgcc -E</CPP>
   <SCXX>$ENV{CC_ROOT}/bin/pgc++</SCXX>
   <MPICC>$ENV{MPI_ROOT}/bin/mpicc</MPICC>
   <MPICXX>$ENV{MPI_ROOT}/bin/mpicxx</MPICXX>
@@ -1023,6 +1024,7 @@ flags should be captured within MPAS CMake files.
   </FFLAGS>
   <SFC>$ENV{FC_ROOT}/bin/pgfortran</SFC>
   <SCC>$ENV{CC_ROOT}/bin/pgcc</SCC>
+  <CPP>$ENV{CC_ROOT}/bin/pgcc -E</CPP>
   <SCXX>$ENV{CC_ROOT}/bin/pgc++</SCXX>
   <MPICC>$ENV{MPI_ROOT}/bin/mpicc</MPICC>
   <MPICXX>$ENV{MPI_ROOT}/bin/mpicxx</MPICXX>
