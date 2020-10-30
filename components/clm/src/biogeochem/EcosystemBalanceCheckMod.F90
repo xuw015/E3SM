@@ -288,7 +288,7 @@ contains
     ! for column and pft
     !
       !$acc routine seq
-    use tracer_varcon,  only : is_active_betr_bgc
+    use clm_varctl, only : active_betr_bgc
     ! !ARGUMENTS:
     type(bounds_type)         , intent(in)    :: bounds
     integer                   , intent(in)    :: num_soilc       ! number of soil columns in filter
@@ -380,7 +380,7 @@ contains
          col_noutputs(c) = col_noutputs(c) + &
               hrv_deadstemn_to_prod10n(c) + hrv_deadstemn_to_prod100n(c)
 
-         if (is_active_betr_bgc)then
+         if (active_betr_bgc)then
             col_noutputs(c) = col_noutputs(c) + f_n2o_nit(c)
 
             col_noutputs(c) = col_noutputs(c) + smin_no3_leached(c) + smin_no3_runoff(c)

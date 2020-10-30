@@ -130,7 +130,7 @@ contains
     ! variables (except for gap-phase mortality and fire fluxes)
     !
       !$acc routine seq
-    use tracer_varcon       , only : is_active_betr_bgc
+    use clm_varctl, only : active_betr_bgc
     use decompMod           , only : bounds_type
     ! !ARGUMENTS:
     type(bounds_type)            , intent(in)    :: bounds
@@ -169,7 +169,7 @@ contains
          end do
       end if
 
-      if (.not. is_active_betr_bgc .and. .not.(use_pflotran .and. pf_cmode) .and. .not.use_fates ) then
+      if (.not. active_betr_bgc .and. .not.(use_pflotran .and. pf_cmode) .and. .not.use_fates ) then
 
          ! plant to litter fluxes
 
@@ -244,7 +244,7 @@ contains
             end if
          end do
 
-   endif   !end if is_active_betr_bgc()
+   endif   !end if active_betr_bgc()
 
    if (.not.use_fates) then
 

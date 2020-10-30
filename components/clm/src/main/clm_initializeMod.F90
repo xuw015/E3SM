@@ -430,6 +430,7 @@ contains
     use SoilWaterRetentionCurveFactoryMod   , only : create_soil_water_retention_curve
     use clm_varctl                          , only : use_clm_interface, use_pflotran
     use clm_interface_pflotranMod           , only : clm_pf_interface_init !, clm_pf_set_restart_stamp
+    use clm_varctl            , only : active_betr_bgc
     use tracer_varcon         , only : is_active_betr_bgc
     use clm_time_manager      , only : is_restart
     use ALMbetrNLMod          , only : betr_namelist_buffer
@@ -575,6 +576,9 @@ contains
       allocate(ep_betr, source=create_betr_simulation_alm())
     endif
 
+    ! pass 'is_active_betr_bgc' to that added in 'clm_varctl'
+    active_betr_bgc = is_active_betr_bgc
+
     call SnowOptics_init( ) ! SNICAR optical parameters:
 
     call SnowAge_init( )    ! SNICAR aging   parameters:
@@ -590,7 +594,7 @@ contains
     call readPrivateParameters()
 
     if (use_cn .or. use_fates) then
-       if (.not. is_active_betr_bgc)then
+       if (.not. active_betr_bgc)then
           if (use_century_decomp) then
            ! Note that init_decompcascade_bgc needs cnstate_vars to be initialized
              call init_decompcascade_bgc(bounds_proc, cnstate_vars, soilstate_vars)

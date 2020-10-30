@@ -874,7 +874,7 @@ contains
     use clm_varpar , only : nlevdecomp, nlevdecomp_full, crop_prog, nlevgrnd
     use clm_varctl , only : hist_wrtch4diag
     use histFileMod, only : hist_addfld1d, hist_addfld2d, hist_addfld_decomp 
-    use tracer_varcon    , only : is_active_betr_bgc
+    use clm_varctl , only : active_betr_bgc
     use clm_varctl,  only : get_carbontag
     !
     ! !ARGUMENTS:
@@ -1582,7 +1582,7 @@ contains
     use clm_varcon       , only : secspday
     use clm_varpar       , only : nlevdecomp, ndecomp_pools, ndecomp_cascade_transitions
     use subgridAveMod    , only : p2c
-    use tracer_varcon    , only : is_active_betr_bgc
+    use clm_varctl       , only : active_betr_bgc
     use MathfuncMod      , only : dot_sum
     use clm_varpar       , only : nlevdecomp_full
     !
@@ -1990,7 +1990,7 @@ contains
        this%som_c_leached_col(c)      = 0._r8
     end do
 
-    if ( (.not. is_active_betr_bgc           ) .and. &
+    if ( (.not. active_betr_bgc           ) .and. &
          (.not. (use_pflotran .and. pf_cmode))) then
 
        ! vertically integrate HR and decomposition cascade fluxes
@@ -2008,7 +2008,7 @@ contains
        end do
 
 
-    elseif (is_active_betr_bgc) then
+    elseif (active_betr_bgc) then
 
        do fc = 1, num_soilc
           c = filter_soilc(fc)
@@ -2188,7 +2188,7 @@ contains
             this%landuseflux_col(c)
     end do
 
-    if  (.not. is_active_betr_bgc) then
+    if  (.not. active_betr_bgc) then
 
        ! _col(cWDC_HR) - coarse woody debris heterotrophic respiration
        do fc = 1,num_soilc
@@ -2537,7 +2537,7 @@ end subroutine CSummary_interface
 
   !summarize heterotrophic respiration for methane calculation
   !
-    use tracer_varcon    , only : is_active_betr_bgc
+    use clm_varctl       , only : active_betr_bgc
     use clm_varpar       , only : nlevdecomp, ndecomp_pools, ndecomp_cascade_transitions
   ! !ARGUMENTS:
     class(carbonflux_type) :: this
@@ -2611,7 +2611,7 @@ end subroutine CSummary_interface
        end if
     enddo
 
-    if ( (.not. is_active_betr_bgc           ) .and. &
+    if ( (.not. active_betr_bgc           ) .and. &
          (.not. (use_pflotran .and. pf_cmode))) then
       ! vertically integrate HR and decomposition cascade fluxes
       do k = 1, ndecomp_cascade_transitions

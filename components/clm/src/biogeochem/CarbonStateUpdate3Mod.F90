@@ -38,7 +38,7 @@ contains
     ! variables affected by fire fluxes and also erosion flux
     !
       !$acc routine seq
-    use tracer_varcon       , only : is_active_betr_bgc
+    use clm_varctl, only : active_betr_bgc
     ! !ARGUMENTS:
     integer                , intent(in)    :: num_soilc       ! number of soil columns in filter
     integer                , intent(in)    :: filter_soilc(:) ! filter for soil columns
@@ -59,7 +59,7 @@ contains
       ! set time steps
       !#py dt = real( get_step_size(), r8 )
 
-      if ( .not.is_active_betr_bgc )then
+      if ( .not.active_betr_bgc )then
          ! column level carbon fluxes from fire
          if (.not.(use_pflotran .and. pf_cmode)) then
              do j = 1, nlevdecomp

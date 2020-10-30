@@ -18,7 +18,7 @@ module NitrogenStateUpdate1Mod
   use ColumnDataType         , only : col_ns, col_nf
   use VegetationType         , only : veg_pp
   use VegetationDataType     , only : veg_ns, veg_nf
-  use tracer_varcon          , only : is_active_betr_bgc
+  use clm_varctl          , only : active_betr_bgc
   ! bgc interface & pflotran:
   use clm_varctl             , only : use_pflotran, pf_cmode
   ! forest fertilization experiment
@@ -105,7 +105,7 @@ contains
     ! variables (except for gap-phase mortality and fire fluxes)
     !
       !$acc routine seq
-    use tracer_varcon, only : is_active_betr_bgc
+    use clm_varctl, only : active_betr_bgc
     ! !ARGUMENTS:
     integer                  , intent(in)    :: num_soilc       ! number of soil columns in filter
     integer                  , intent(in)    :: filter_soilc(:) ! filter for soil columns
@@ -146,7 +146,7 @@ contains
 
       ! column-level fluxes
 
-      if (.not. is_active_betr_bgc .and. .not.(use_pflotran .and. pf_cmode)) then
+      if (.not. active_betr_bgc .and. .not.(use_pflotran .and. pf_cmode)) then
 
          do j = 1, nlevdecomp
             do fc = 1,num_soilc
@@ -329,7 +329,7 @@ contains
             end do
 
          end if
-      endif  !end if is_active_betr_bgc
+      endif  !end if active_betr_bgc
 
       ! forest fertilization
       !#py call get_curr_date(kyr, kmo, kda, mcsec)

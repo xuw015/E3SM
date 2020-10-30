@@ -18,7 +18,7 @@ module CNNStateUpdate1BeTRMod
   use CNNitrogenStateType    , only : nitrogenstate_type
   use VegetationType         , only : veg_pp
   use VegetationDataType     , only : veg_ns, veg_nf
-  use tracer_varcon          , only : is_active_betr_bgc
+  use clm_varctl          , only : active_betr_bgc
   !! bgc interface & pflotran:
   use clm_varctl             , only : use_pflotran, pf_cmode
   !

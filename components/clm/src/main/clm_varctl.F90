@@ -220,6 +220,8 @@ module clm_varctl
   !----------------------------------------------------------
   logical, public :: use_betr = .false.          ! true=> use BeTR
   !$acc declare create(use_betr)
+  logical, public :: active_betr_bgc = .false.   ! passed by 'active_betr_bgc' from 'tracer_control'
+  !$acc declare create(active_betr_bgc)
 
   !----------------------------------------------------------
   ! lai streams switch for Sat. Phenology

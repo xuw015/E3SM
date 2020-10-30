@@ -25,7 +25,7 @@ module Method_procs_acc
   use column_varcon   , only : icol_road_perv, icol_road_imperv, icol_roof, icol_sunwall, icol_shadewall
   use decompMod       , only : bounds_type
   use CNStateType     , only: cnstate_type
-  use tracer_varcon   , only : is_active_betr_bgc
+  use clm_varctl, only : active_betr_bgc
   use CNDecompCascadeConType , only : decomp_cascade_con
   use ColumnType      , only : col_pp
   use LandunitType    , only : lun_pp
@@ -1154,7 +1154,7 @@ module Method_procs_acc
          end if
       enddo
 
-      if ( (.not. is_active_betr_bgc           ) .and. &
+      if ( (.not. active_betr_bgc           ) .and. &
            (.not. (use_pflotran .and. pf_cmode))) then
         ! vertically integrate HR and decomposition cascade fluxes
         do k = 1, ndecomp_cascade_transitions
@@ -1275,7 +1275,7 @@ module Method_procs_acc
          colcf%som_c_leached(c)      = 0._r8
       end do
 
-      if ( (.not. is_active_betr_bgc           ) .and. &
+      if ( (.not. active_betr_bgc           ) .and. &
            (.not. (use_pflotran .and. pf_cmode))) then
 
          ! vertically integrate HR and decomposition cascade fluxes
@@ -1302,7 +1302,7 @@ module Method_procs_acc
          end do
 
 
-      elseif (is_active_betr_bgc) then
+      elseif (active_betr_bgc) then
 
          do fc = 1, num_soilc
             c = filter_soilc(fc)
@@ -1473,7 +1473,7 @@ module Method_procs_acc
               colcf%landuseflux(c)
       end do
 
-      if  (.not. is_active_betr_bgc) then
+      if  (.not. active_betr_bgc) then
 
          ! (cWDC_HR) - coarse woody debris heterotrophic respiration
          do fc = 1,num_soilc
@@ -1560,7 +1560,7 @@ module Method_procs_acc
             end do
          end if
 
-      end if ! .not. is_active_betr_bgc
+      end if ! .not. active_betr_bgc
 
       do fc = 1,num_soilc
           c = filter_soilc(fc)

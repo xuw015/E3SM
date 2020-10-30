@@ -12,7 +12,6 @@ module clm_driver
   use shr_kind_mod           , only : r8 => shr_kind_r8
   use shr_sys_mod            , only : shr_sys_flush
   use shr_log_mod            , only : errMsg => shr_log_errMsg
-  use clm_varctl             , only : wrtdia, iulog, create_glacier_mec_landunit, use_fates
   use clm_varpar             , only : nlevtrc_soil, nlevsoi, nlevdecomp_full
   use clm_varctl             , only : wrtdia, iulog, create_glacier_mec_landunit, use_fates, use_betr
   use clm_varctl             , only : use_cn, use_lch4, use_voc, use_noio, use_c13, use_c14
@@ -128,7 +127,7 @@ module clm_driver
   use clm_instMod            , only : chemstate_vars
   use clm_instMod            , only : alm_fates
   use clm_instMod            , only : PlantMicKinetics_vars
-  use tracer_varcon          , only : is_active_betr_bgc
+  use clm_varctl          , only : active_betr_bgc
   use CNEcosystemDynBetrMod  , only : CNEcosystemDynBetr, CNFluxStateBetrSummary
   use UrbanParamsType        , only : urbanparams_vars, urban_hac_int, urban_traffic
   use GridcellType             , only : grc_pp
@@ -1028,7 +1027,7 @@ contains
 
          ! FIX(SPM,032414)  push these checks into the routines below and/or make this consistent.
        if (.not. use_fates) then
-         if( .not. is_active_betr_bgc) then
+         if( .not. active_betr_bgc) then
            if (use_cn) then
 
              ! fully prognostic canopy structure and C-N biogeochemistry
@@ -1077,7 +1076,7 @@ contains
              end if
 
           end if  ! end of if-use_cn
-          end if  ! end of is_active_betr_bgc
+          end if  ! end of active_betr_bgc
         end if    ! end of if-use_fates
 
 
@@ -1088,7 +1087,7 @@ contains
               photosyns_vars, drydepvel_vars)
 
 
-         if (use_lch4 .and. .not. is_active_betr_bgc) then
+         if (use_lch4 .and. .not. active_betr_bgc) then
            !warning: do not call ch4 before AnnualUpdate, which will fail the ch4 model
            call CH4 (bounds_clump,                                                                  &
                filter(nc)%num_soilc, filter(nc)%soilc,                                             &
@@ -1118,7 +1117,7 @@ contains
 
           if (use_cn) then
 
-            if (.not. is_active_betr_bgc)then
+            if (.not. active_betr_bgc)then
              ! FIX(SPM,032414) there are use_fates checks in this routine...be consistent
              ! (see comment above re: no leaching
              call EcosystemDynLeaching( bounds_clump,                &

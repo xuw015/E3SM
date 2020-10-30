@@ -16,7 +16,7 @@ module PhosphorusStateUpdate3Mod
   use PhosphorusStateType , only : phosphorusstate_type
   use PhosphorusFLuxType  , only : phosphorusflux_type
   use soilorder_varcon    , only : smax,ks_sorption
-  use tracer_varcon       , only : is_active_betr_bgc
+  use clm_varctl, only : active_betr_bgc
   ! bgc interface & pflotran:
   use clm_varctl          , only : use_pflotran, pf_cmode
   use clm_varctl          , only : nu_com
@@ -86,7 +86,7 @@ contains
             flux_mineralization(c,j) = 0._r8
          enddo
       enddo
-      if(is_active_betr_bgc)then
+      if(active_betr_bgc)then
         do j = 1, nlevdecomp
           do fc = 1,num_soilc
             c = filter_soilc(fc)
@@ -287,7 +287,7 @@ contains
          end do
       end do
 
-    endif !is_active_betr_bgc
+    endif !active_betr_bgc
       ! patch-level phosphorus fluxes
 
       do fp = 1,num_soilp
