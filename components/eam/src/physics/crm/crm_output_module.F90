@@ -1,6 +1,6 @@
 module crm_output_module
    use params_kind,       only: crm_rknd
-   use crmdims,      only: crm_nx, crm_ny, crm_nz
+   use crmdims,      only: crm_nx, crm_ny, crm_nz, crm_nvark
    use openacc_utils
    implicit none
    public crm_output_type
@@ -87,6 +87,11 @@ module crm_output_module
       real(crm_rknd), allocatable :: qltend  (:,:)          ! CRM output tendency of water vapor
       real(crm_rknd), allocatable :: qcltend (:,:)          ! CRM output tendency of cloud liquid water
       real(crm_rknd), allocatable :: qiltend (:,:)          ! CRM output tendency of cloud ice
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      real(crm_rknd), allocatable :: t_csvt_tend (:,:,:)         ! CRM output tendency of variance
+      real(crm_rknd), allocatable :: q_csvt_tend (:,:,:)         ! CRM output tendency of variance
+#endif
 
       ! These are all time and spatial averages, on the GCM grid
       real(crm_rknd), allocatable :: cld   (:,:)      ! cloud fraction
@@ -260,6 +265,11 @@ contains
          if (.not. allocated(output%qcltend))  allocate(output%qcltend(ncol,nlev))
          if (.not. allocated(output%qiltend))  allocate(output%qiltend(ncol,nlev))
 
+#if defined(MMF_VARIANCE_TRANSPORT)
+         if (.not. allocated(output%t_csvt_tend))  allocate(output%t_csvt_tend(ncol,nlev,crm_nvark))
+         if (.not. allocated(output%q_csvt_tend))  allocate(output%q_csvt_tend(ncol,nlev,crm_nvark))
+#endif
+
          if (.not. allocated(output%cld   )) allocate(output%cld   (ncol,nlev))  ! cloud fraction
          if (.not. allocated(output%gicewp)) allocate(output%gicewp(ncol,nlev))  ! ice water path
          if (.not. allocated(output%gliqwp)) allocate(output%gliqwp(ncol,nlev))  ! ice water path
@@ -304,6 +314,10 @@ contains
          call prefetch(output%qltend  )
          call prefetch(output%qcltend )
          call prefetch(output%qiltend )
+#if defined(MMF_VARIANCE_TRANSPORT)
+         call prefetch(output%t_csvt_tend )
+         call prefetch(output%q_csvt_tend )
+#endif
          call prefetch(output%cld    )
          call prefetch(output%gicewp )
          call prefetch(output%gliqwp )
@@ -417,6 +431,11 @@ contains
       output%qltend  = 0
       output%qcltend = 0
       output%qiltend = 0
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      output%t_csvt_tend = 0
+      output%q_csvt_tend = 0
+#endif
 
       output%cld    = 0
       output%gicewp = 0
@@ -534,6 +553,11 @@ contains
       if (allocated(output%qltend)) deallocate(output%qltend)
       if (allocated(output%qcltend)) deallocate(output%qcltend)
       if (allocated(output%qiltend)) deallocate(output%qiltend)
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      if (allocated(output%t_csvt_tend)) deallocate(output%t_csvt_tend)
+      if (allocated(output%q_csvt_tend)) deallocate(output%q_csvt_tend)
+#endif
 
       if (allocated(output%cld)) deallocate(output%cld)
       if (allocated(output%gicewp)) deallocate(output%gicewp)

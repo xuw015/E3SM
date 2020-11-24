@@ -55,7 +55,7 @@ subroutine crm_history_init(species_class)
    use ppgrid,          only: pcols, pver, pverp
    use constituents,    only: pcnst, cnst_name
    use cam_history,     only: addfld, add_default, horiz_only
-   use crmdims,         only: crm_nx, crm_ny, crm_nz, crm_nx_rad, crm_ny_rad
+   use crmdims,         only: crm_nx, crm_ny, crm_nz, crm_nx_rad, crm_ny_rad, crm_nvark
 #ifdef MODAL_AERO
    use cam_history,     only: fieldname_len
    use modal_aero_data, only: cnst_name_cw, lmassptr_amode, &
@@ -72,9 +72,10 @@ subroutine crm_history_init(species_class)
 
    !----------------------------------------------------------------------------
    ! local variables
-   integer :: m
+   integer :: m,k
    logical :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
+   character(len=4)  :: kstr
 
 #ifdef MODAL_AERO
    integer :: l, lphase, lspec
@@ -285,6 +286,14 @@ subroutine crm_history_init(species_class)
 
    call addfld('MMF_SUBCYCLE_FAC', horiz_only,'A',' ', 'CRM subcycle ratio: 1.0 = no subcycling' )
 
+#if defined( MMF_VARIANCE_TRANSPORT )
+   do k = 1, crm_nvark
+      write(kstr,'(i4)') k
+      call addfld('MMF_T_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM T Variance Wavenumber 1')
+      call addfld('MMF_Q_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM Q Variance Wavenumber 1')
+   end do
+#endif
+
    !----------------------------------------------------------------------------
    ! add dropmixnuc tendencies for all modal aerosol species
    !----------------------------------------------------------------------------
@@ -380,6 +389,7 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    use ppgrid,                 only: pcols, pver, pverp
    use physconst,              only: cpair
    use cam_history,            only: outfld
+   use crmdims,                only: crm_nvark
    
    !----------------------------------------------------------------------------
    ! interface variables
@@ -409,6 +419,8 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    integer :: i, k                     ! loop iterators
    logical :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
+   integer :: idx_csvt_t, idx_csvt_q
+   character(len=4) :: kstr
 
    !----------------------------------------------------------------------------
 
@@ -631,6 +643,16 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    call outfld('MMF_DU',ptend%u, pcols, lchnk )
    call outfld('MMF_DV',ptend%v, pcols, lchnk )
 #endif /* MMF_MOMENTUM_FEEDBACK */
+
+#if defined( MMF_VARIANCE_TRANSPORT )
+   do k = 1, crm_nvark
+      write(kstr,'(i4)') k
+      call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
+      call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+      call outfld('MMF_T_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_t), pcols, lchnk )
+      call outfld('MMF_Q_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_q), pcols, lchnk )
+   end do
+#endif
 
 end subroutine crm_history_out
 !---------------------------------------------------------------------------------------------------

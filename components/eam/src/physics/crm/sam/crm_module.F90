@@ -56,10 +56,11 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     use sgs
     use crmtracers
     use scalar_momentum_mod
+    use variance_transport_mod
 #ifdef MODAL_AERO
     use modal_aero_data       , only: ntot_amode
 #endif
-    use crmdims               , only: crm_nx_rad, crm_ny_rad
+    use crmdims               , only: crm_nx_rad, crm_ny_rad, crm_nvark
 #ifdef ECPP
     use ecppvars              , only: qlsink, precr, precsolid, &
                                       area_bnd_final, area_bnd_sum, area_cen_final, area_cen_sum, &
@@ -111,7 +112,7 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     real(r8)        :: factor_xy, factor_xyt, idt_gl
     real(crm_rknd)  :: tmp1, tmp2, tmp
     real(crm_rknd)  :: u2z,v2z,w2z
-    integer         :: i,j,k,l,ptop,nn,icyc,icrm
+    integer         :: i,j,k,l,ptop,nn,icyc,icrm,iwn
     integer         :: kx
     real(crm_rknd)  :: qsat, omg, rh_tmp
     real(crm_rknd), allocatable  :: colprec(:), colprecs(:)
@@ -245,6 +246,9 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
 #endif
 #if defined(MMF_ESMT)
   call allocate_scalar_momentum(ncrms)
+#endif
+#if defined(MMF_VARIANCE_TRANSPORT)
+  call allocate_CSVT(ncrms)
 #endif
 
   crm_rad_temperature => crm_rad%temperature(1:ncrms,:,:,:)
@@ -528,6 +532,10 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     enddo
   enddo
 
+#if defined(MMF_VARIANCE_TRANSPORT)
+  call CSVT_diagnose(ncrms)
+#endif
+
   !$acc parallel loop collapse(2) async(asyncid)
   do k=1,nzm
     do icrm = 1 , ncrms
@@ -557,6 +565,12 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
       vg0  (icrm,k) = vln(icrm,l)
       tg0  (icrm,k) = crm_input%tl(icrm,l)+gamaz(icrm,k)-fac_cond*crm_input%qccl(icrm,l)-fac_sub*crm_input%qiil(icrm,l)
       qg0  (icrm,k) = crm_input%ql(icrm,l)+crm_input%qccl(icrm,l)+crm_input%qiil(icrm,l)
+#if defined(MMF_VARIANCE_TRANSPORT)
+      do iwn = 1,crm_nvark
+        t_csvt_amp_tend(icrm,k,iwn) = ( crm_input%t_csvt(icrm,l,iwn) - t_csvt_amp(icrm,k,iwn) )*idt_gl
+        q_csvt_amp_tend(icrm,k,iwn) = ( crm_input%q_csvt(icrm,l,iwn) - q_csvt_amp(icrm,k,iwn) )*idt_gl
+      end do
+#endif
     end do ! k
   end do ! icrm
 
@@ -743,8 +757,16 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
       call buoyancy(ncrms)
 
       !------------------------------------------------------------
+      ! variance transport forcing
+#if defined(MMF_VARIANCE_TRANSPORT)
+      call CSVT_diagnose(ncrms)
+      call CSVT_forcing(ncrms)
+#endif
+      !------------------------------------------------------------
       !       Large-scale and surface forcing:
       call forcing(ncrms)
+
+
 
       ! Apply radiative tendency
       !$acc parallel loop collapse(4) async(asyncid)
@@ -1224,6 +1246,11 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     enddo
   enddo
 
+#if defined(MMF_VARIANCE_TRANSPORT)
+  ! extra diagnose step here for accurate output tendencies
+  call CSVT_diagnose(ncrms)
+#endif
+
   !$acc parallel loop collapse(2) async(asyncid)
   do k = 1 , plev
     do icrm = 1 , ncrms
@@ -1250,6 +1277,25 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
       crm_output%qiltend(icrm,k) = 0.
     enddo
   enddo
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+  ! zero out tendencies in top 2 CRM levels and above CRM top
+  ! do k = 1 , ptop+1
+  do iwn = 1,crm_nvark
+    do k = 1,plev
+      do icrm = 1,ncrms
+        if ( k>(ptop+1) ) then
+          l = plev-k+1
+          crm_output%t_csvt_tend(icrm,k,iwn) = ( t_csvt_amp(icrm,l,iwn) - crm_input%t_csvt(icrm,k,iwn) ) * icrm_run_time
+          crm_output%q_csvt_tend(icrm,k,iwn) = ( q_csvt_amp(icrm,l,iwn) - crm_input%q_csvt(icrm,k,iwn) ) * icrm_run_time
+        else
+          crm_output%t_csvt_tend(icrm,k,iwn) = 0.
+          crm_output%q_csvt_tend(icrm,k,iwn) = 0.
+        end if
+      end do
+    end do
+  end do
+#endif
 
   !-------------------------------------------------------------
   !
@@ -1707,6 +1753,9 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
 #endif
 #if defined( MMF_ESMT )
   call deallocate_scalar_momentum()
+#endif
+#if defined(MMF_VARIANCE_TRANSPORT)
+  call deallocate_CSVT()
 #endif
 
 end subroutine crm

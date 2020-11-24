@@ -69,7 +69,8 @@ subroutine crm_physics_register()
    use physics_buffer,      only: dyn_time_lvls, pbuf_add_field, dtype_r8, pbuf_get_index
    use phys_control,        only: phys_getopts
    use crmdims,             only: crm_nx, crm_ny, crm_nz, crm_dx, crm_dy, crm_dt, &
-                                  crm_nx_rad, crm_ny_rad
+                                  crm_nx_rad, crm_ny_rad, crm_nvark
+   use constituents,        only: cnst_add
 #if defined(MMF_SAMXX)
    use cpp_interface_mod,   only: setparm
    use gator_mod, only: gator_init
@@ -85,6 +86,8 @@ subroutine crm_physics_register()
    integer idx
    logical           :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
+   character(len=4)  :: kstr
+   integer           :: k
    integer, dimension(1) :: dims_gcm_1D
    integer, dimension(2) :: dims_gcm_2D
    integer, dimension(3) :: dims_crm_2D
@@ -93,6 +96,7 @@ subroutine crm_physics_register()
 #ifdef MODAL_AERO
    integer, dimension(5) :: dims_crm_aer
 #endif
+   integer :: cnst_ind
    !----------------------------------------------------------------------------
 #ifdef MMF_SAMXX
    call gator_init()
@@ -127,6 +131,16 @@ subroutine crm_physics_register()
 
    ! Setup CRM internal parameters
    call setparm()
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+   do k = 1, crm_nvark
+      write(kstr,'(i4)') k
+      call cnst_add('CRM_T_AMP_K'//adjustl(trim(kstr)), real(0,r8), real(0,r8), real(0,r8), cnst_ind, &
+                    longname='CRM_T_AMP_K'//adjustl(trim(kstr)), readiv=.false., mixtype='dry',cam_outfld=.false.)
+      call cnst_add('CRM_Q_AMP_K'//adjustl(trim(kstr)), real(0,r8), real(0,r8), real(0,r8), cnst_ind, &
+                    longname='CRM_Q_AMP_K'//adjustl(trim(kstr)), readiv=.false., mixtype='dry',cam_outfld=.false.)
+   end do
+#endif
 
    ! Register MMF history variables
    call crm_history_register()
@@ -205,7 +219,7 @@ end subroutine crm_physics_register
 !===================================================================================================
 !===================================================================================================
 
-subroutine crm_physics_init(species_class)
+subroutine crm_physics_init(state,species_class)
 !---------------------------------------------------------------------------------------------------
 ! 
 ! Purpose: initialize some variables, and add necessary fields into output fields 
@@ -217,17 +231,26 @@ subroutine crm_physics_init(species_class)
 #ifdef ECPP
    use module_ecpp_ppdriver2, only: papampollu_init
 #endif
+   use ppgrid,                only: begchunk, endchunk
+   use constituents,          only: pcnst, cnst_get_ind
+   use crmdims,               only: crm_nvark
    !----------------------------------------------------------------------------
    ! interface variables
    ! species_class is defined as input so it needs to be outside 
    ! of MODAL_AERO condition for 1-moment micro to work
+   type(physics_state), intent(inout), dimension(begchunk:endchunk) :: state
+   ! type(physics_state), intent(inout) :: state(:)
    integer, intent(inout) :: species_class(:)
    !----------------------------------------------------------------------------
    ! local variables
-   integer :: m
+   integer :: m,k
    integer :: ierror   ! Error code
    logical :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
+   character(len=4)  :: kstr
+   integer :: idx_csvt_t, idx_csvt_q
+   integer :: lchnk
+   integer :: ncol
    !----------------------------------------------------------------------------
    call phys_getopts(use_ECPP_out = use_ECPP)
    call phys_getopts(MMF_microphysics_scheme_out = MMF_microphysics_scheme)
@@ -268,6 +291,19 @@ subroutine crm_physics_init(species_class)
    prec_pcw_idx = pbuf_get_index('PREC_PCW')
    snow_pcw_idx = pbuf_get_index('SNOW_PCW')
 
+#if defined(MMF_VARIANCE_TRANSPORT)
+   do k = 1, crm_nvark
+      write(kstr,'(i4)') k
+      call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
+      call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+      do lchnk = begchunk, endchunk
+         ncol  = state(lchnk)%ncol
+         state(lchnk)%q(:ncol,:pver,idx_csvt_t) = 0
+         state(lchnk)%q(:ncol,:pver,idx_csvt_q) = 0
+      end do
+   end do
+#endif
+
 end subroutine crm_physics_init
 
 !===================================================================================================
@@ -291,7 +327,7 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
    use physics_types,   only: physics_state, physics_tend, physics_ptend, physics_ptend_init
    use camsrfexch,      only: cam_in_t, cam_out_t
    use time_manager,    only: is_first_step, get_nstep
-   use crmdims,         only: crm_nx, crm_ny, crm_nz, crm_nx_rad, crm_ny_rad
+   use crmdims,         only: crm_nx, crm_ny, crm_nz, crm_nx_rad, crm_ny_rad, crm_nvark
    use physconst,       only: cpair, latvap, latice, gravit, cappa
    use constituents,    only: pcnst, cnst_get_ind
 #if defined(MMF_SAMXX)
@@ -438,6 +474,9 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
    logical(c_bool)             :: use_crm_accel
    logical(c_bool)             :: crm_accel_uv
    integer                     :: igstep
+
+   integer :: idx_csvt_t, idx_csvt_q
+   character(len=4) :: kstr
 
    !------------------------------------------------------------------------------------------------
    !------------------------------------------------------------------------------------------------
@@ -827,6 +866,16 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
          end do
       end do
 #endif
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      do k = 1, crm_nvark
+         write(kstr,'(i4)') k
+         call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
+         call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         crm_input%t_csvt(:ncol,:pver,k) = state%q(:ncol,:pver,idx_csvt_t)
+         crm_input%q_csvt(:ncol,:pver,k) = state%q(:ncol,:pver,idx_csvt_q)
+      end do
+#endif
       !---------------------------------------------------------------------------------------------
       ! Set the input wind (also sets CRM orientation)
       !---------------------------------------------------------------------------------------------
@@ -931,6 +980,20 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
       ptend%q(:ncol,:pver,ixcldliq) = crm_output%qcltend(1:ncol,1:pver)
       ptend%q(:ncol,:pver,ixcldice) = crm_output%qiltend(1:ncol,1:pver)
 
+#if defined(MMF_VARIANCE_TRANSPORT)
+      do k = 1, crm_nvark
+         write(kstr,'(i4)') k
+         call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
+         call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         ptend%q(1:ncol,1:pver,idx_csvt_t) = crm_output%t_csvt_tend(1:ncol,1:pver,k)
+         ptend%q(1:ncol,1:pver,idx_csvt_q) = crm_output%q_csvt_tend(1:ncol,1:pver,k)
+      end do
+      ! FOR TESTING NEW TRACER - use damping everywhere except a single source columns
+      ! ptend%q(:ncol,:pver,idx_csvt_t) = 0
+      ! ptend%q(:ncol,:pver,idx_csvt_q) = 0
+      ! ptend%q(:ncol,:pver,idx_csvt_t) = (-1_r8/(86400_r8)) * state%q(:ncol,:pver,idx_csvt_t) ! 1 min damping
+      ! if (lchnk==begchunk) ptend%q(1,:pver,idx_csvt_t) = 0.01_r8
+#endif
       !---------------------------------------------------------------------------------------------
       ! Add radiative heating tendency above CRM
       !---------------------------------------------------------------------------------------------
@@ -1028,6 +1091,15 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
       ptend%lu           = .FALSE.
       ptend%lv           = .FALSE.
 
+#if defined(MMF_VARIANCE_TRANSPORT)
+      do k = 1, crm_nvark
+         write(kstr,'(i4)') k
+         call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
+         call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         ptend%lq(idx_csvt_t) = .TRUE.
+         ptend%lq(idx_csvt_q) = .TRUE.
+      end do
+#endif
       !---------------------------------------------------------------------------------------------
       ! CRM momentum tendencies
       !---------------------------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 module crm_input_module
    use params_kind, only: crm_rknd
+   use crmdims,     only: crm_nvark
 #ifdef MODAL_AERO
    use modal_aero_data, only: ntot_amode
 #endif
@@ -40,6 +41,11 @@ module crm_input_module
 #if defined( MMF_ESMT )
       real(crm_rknd), allocatable :: ul_esmt(:,:)        ! input u for ESMT
       real(crm_rknd), allocatable :: vl_esmt(:,:)        ! input v for ESMT
+#endif
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      real(crm_rknd), allocatable :: t_csvt (:,:,:)         ! CRM output tendency of variance
+      real(crm_rknd), allocatable :: q_csvt (:,:,:)         ! CRM output tendency of variance
 #endif
 
    contains
@@ -99,6 +105,7 @@ contains
       call prefetch(this%fluxt00)
       call prefetch(this%fluxq00)
 
+
 #if defined( m2005 ) && defined( MODAL_AERO )
       if (.not. allocated(this%naermod))  allocate(this%naermod(ncrms,nlev,ntot_amode))
       if (.not. allocated(this%vaerosol)) allocate(this%vaerosol(ncrms,nlev,ntot_amode))
@@ -111,6 +118,13 @@ contains
 #if defined(MMF_ESMT)
       if (.not. allocated(this%ul_esmt))  allocate(this%ul_esmt(ncrms,nlev))
       if (.not. allocated(this%vl_esmt))  allocate(this%vl_esmt(ncrms,nlev))
+#endif
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      if (.not. allocated(this%t_csvt))  allocate(this%t_csvt(ncrms,nlev,crm_nvark))
+      if (.not. allocated(this%q_csvt))  allocate(this%q_csvt(ncrms,nlev,crm_nvark))
+      call prefetch(this%t_csvt)
+      call prefetch(this%q_csvt)
 #endif
 
       ! Initialize
@@ -143,6 +157,11 @@ contains
 #if defined( MMF_ESMT )
       this%ul_esmt = 0
       this%vl_esmt = 0
+#endif
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      this%t_csvt = 0
+      this%q_csvt = 0
 #endif
 
    end subroutine crm_input_initialize
@@ -182,6 +201,11 @@ contains
 #if defined(MMF_ESMT)
       deallocate(this%ul_esmt)
       deallocate(this%vl_esmt)
+#endif
+
+#if defined(MMF_VARIANCE_TRANSPORT)
+      deallocate(this%t_csvt)
+      deallocate(this%q_csvt)
 #endif
 
    end subroutine crm_input_finalize 

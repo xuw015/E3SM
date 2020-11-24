@@ -359,5 +359,8 @@ CRM number of averaged columns in x for radiation
 <entry id="crm_ny_rad" value="1">
 CRM number of averaged columns in y for radiation
 </entry>
+<entry id="crm_ntrc" value="0">
+CRM number of tracers used for variance transport
+</entry>
 
 </config_definition>

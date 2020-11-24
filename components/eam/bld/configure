@@ -348,7 +348,8 @@ GetOptions(
     "crm_dt=s"                  => \$opts{'crm_dt'},
     "crm_nx_rad=s"              => \$opts{'crm_nx_rad'},
     "crm_ny_rad=s"              => \$opts{'crm_ny_rad'},
-    "MMF_microphysics_scheme=s"     => \$opts{'MMF_microphysics_scheme'},
+    "crm_ntrc=s"                => \$opts{'crm_ntrc'},
+    "MMF_microphysics_scheme=s" => \$opts{'MMF_microphysics_scheme'},
     "crm_adv=s"                 => \$opts{'crm_adv'},
     "crm=s"                     => \$opts{'crm'},
     "debug"                     => \$opts{'debug'},
@@ -1304,6 +1305,7 @@ if (defined $opts{'use_MMF'}) {
     $cfg_ref->set('crm_dt', $opts{'crm_dt'});
     if (defined $opts{'crm_nx_rad'}) { $cfg_ref->set('crm_nx_rad', $opts{'crm_nx_rad'}); }
     if (defined $opts{'crm_ny_rad'}) { $cfg_ref->set('crm_ny_rad', $opts{'crm_ny_rad'}); }
+    if (defined $opts{'crm_ntrc'})   { $cfg_ref->set('crm_ntrc',   $opts{'crm_ntrc'}); }
     $cfg_ref->set('MMF_microphysics_scheme', $opts{'MMF_microphysics_scheme'});
     $cfg_ref->set('crm_adv', $opts{'crm_adv'});
     $cfg_ref->set('crm', $opts{'crm'});
@@ -1513,10 +1515,10 @@ else {
             if ($print>=2) { print "Advected constituents added by $microphys_pkg microphysics: 8$eol"; }
         }
 
-	if ($clubb_do_adv) {
-	    $nadv += 9;
-            if ($print>=2) { print "Advected constituents added by $microphys_pkg microphysics: 8$eol"; }
-	}
+        if ($clubb_do_adv) {
+            $nadv += 9;
+                if ($print>=2) { print "Advected constituents added by $microphys_pkg microphysics: 8$eol"; }
+        }
 
         # co2_cycle
         if ($co2_cycle) {
@@ -1533,6 +1535,14 @@ else {
         if ($unicon) {
             $nadv += 5;
             if ($print>=2) { print "Advected constituents added by UNICON: 5$eol"; }
+        }
+
+        
+        # if (defined $opts{'use_MMF'}) {
+        if (defined $opts{'crm_ntrc'})   { 
+            my $crm_ntrc = $cfg_ref->get('crm_ntrc');
+            $nadv += $crm_ntrc*2;
+            if ($print>=2) { print "Advected variance constituent added for MMF: $crm_ntrc$eol"; }
         }
 
     }
@@ -1834,6 +1844,12 @@ if (defined $opts{'use_MMF'}) {
         $cfg_cppdefs .= " -DMMF_SAM "
     } elsif ($crm eq 'samxx') {
         $cfg_cppdefs .= " -DMMF_SAMXX "
+    }
+    if (defined $opts{'crm_ntrc'})   { 
+        my $crm_ntrc = $cfg_ref->get('crm_ntrc');
+        $cfg_cppdefs .= " -DCRM_NTRC=$crm_ntrc "
+    } else {
+        $cfg_cppdefs .= " -DCRM_NTRC=0 "
     }
 
 }
