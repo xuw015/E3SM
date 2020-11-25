@@ -118,8 +118,8 @@ subroutine CSVT_diagnose(ncrms)
             ! initialize FFT input
             do i = 1,nx
                fft_out_t(i) = t(icrm,i,j,k)
-               fft_out_q(i) = qv(icrm,i,j,k)
-               ! fft_out_q(i) = qv(icrm,i,j,k)+qcl(icrm,i,j,k)+qci(icrm,i,j,k)
+               ! fft_out_q(i) = qv(icrm,i,j,k)
+               fft_out_q(i) = qv(icrm,i,j,k)+qcl(icrm,i,j,k)+qci(icrm,i,j,k)
             end do
 
             ! do the forward transform

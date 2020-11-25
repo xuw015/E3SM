@@ -158,12 +158,6 @@ module vars
   real(crm_rknd), allocatable :: hgaer(:,:,:)    ! hygroscopicity of aerosol mode
 #endif
 
-! #if defined(MMF_VARIANCE_TRANSPORT)
-!   real(crm_rknd), allocatable :: t_variance(:,:,:)
-!   real(crm_rknd), allocatable :: q_variance(:,:,:)
-! #endif
-
-
 contains
 
 
