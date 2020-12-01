@@ -286,11 +286,12 @@ subroutine crm_history_init(species_class)
 
    call addfld('MMF_SUBCYCLE_FAC', horiz_only,'A',' ', 'CRM subcycle ratio: 1.0 = no subcycling' )
 
-#if defined( MMF_VARIANCE_TRANSPORT )
+#if defined( MMF_CSVT )
    do k = 1, crm_nvark
       write(kstr,'(i4)') k
       call addfld('MMF_T_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM T Variance Wavenumber 1')
       call addfld('MMF_Q_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM Q Variance Wavenumber 1')
+      call addfld('MMF_U_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM U Variance Wavenumber 1')
    end do
 #endif
 
@@ -419,7 +420,7 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    integer :: i, k                     ! loop iterators
    logical :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
-   integer :: idx_csvt_t, idx_csvt_q
+   integer :: idx_csvt_t, idx_csvt_q, idx_csvt_u
    character(len=4) :: kstr
 
    !----------------------------------------------------------------------------
@@ -644,13 +645,15 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    call outfld('MMF_DV',ptend%v, pcols, lchnk )
 #endif /* MMF_MOMENTUM_FEEDBACK */
 
-#if defined( MMF_VARIANCE_TRANSPORT )
+#if defined( MMF_CSVT )
    do k = 1, crm_nvark
       write(kstr,'(i4)') k
       call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
       call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+      call cnst_get_ind( 'CRM_U_AMP_K'//adjustl(trim(kstr)), idx_csvt_u )
       call outfld('MMF_T_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_t), pcols, lchnk )
       call outfld('MMF_Q_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_q), pcols, lchnk )
+      call outfld('MMF_U_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_u), pcols, lchnk )
    end do
 #endif
 

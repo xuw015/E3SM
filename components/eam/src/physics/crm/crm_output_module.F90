@@ -88,9 +88,10 @@ module crm_output_module
       real(crm_rknd), allocatable :: qcltend (:,:)          ! CRM output tendency of cloud liquid water
       real(crm_rknd), allocatable :: qiltend (:,:)          ! CRM output tendency of cloud ice
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       real(crm_rknd), allocatable :: t_csvt_tend (:,:,:)         ! CRM output tendency of variance
       real(crm_rknd), allocatable :: q_csvt_tend (:,:,:)         ! CRM output tendency of variance
+      real(crm_rknd), allocatable :: u_csvt_tend (:,:,:)         ! CRM output tendency of variance
 #endif
 
       ! These are all time and spatial averages, on the GCM grid
@@ -265,9 +266,10 @@ contains
          if (.not. allocated(output%qcltend))  allocate(output%qcltend(ncol,nlev))
          if (.not. allocated(output%qiltend))  allocate(output%qiltend(ncol,nlev))
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
          if (.not. allocated(output%t_csvt_tend))  allocate(output%t_csvt_tend(ncol,nlev,crm_nvark))
          if (.not. allocated(output%q_csvt_tend))  allocate(output%q_csvt_tend(ncol,nlev,crm_nvark))
+         if (.not. allocated(output%u_csvt_tend))  allocate(output%u_csvt_tend(ncol,nlev,crm_nvark))
 #endif
 
          if (.not. allocated(output%cld   )) allocate(output%cld   (ncol,nlev))  ! cloud fraction
@@ -314,9 +316,10 @@ contains
          call prefetch(output%qltend  )
          call prefetch(output%qcltend )
          call prefetch(output%qiltend )
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
          call prefetch(output%t_csvt_tend )
          call prefetch(output%q_csvt_tend )
+         call prefetch(output%u_csvt_tend )
 #endif
          call prefetch(output%cld    )
          call prefetch(output%gicewp )
@@ -432,9 +435,10 @@ contains
       output%qcltend = 0
       output%qiltend = 0
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       output%t_csvt_tend = 0
       output%q_csvt_tend = 0
+      output%u_csvt_tend = 0
 #endif
 
       output%cld    = 0
@@ -554,9 +558,10 @@ contains
       if (allocated(output%qcltend)) deallocate(output%qcltend)
       if (allocated(output%qiltend)) deallocate(output%qiltend)
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       if (allocated(output%t_csvt_tend)) deallocate(output%t_csvt_tend)
       if (allocated(output%q_csvt_tend)) deallocate(output%q_csvt_tend)
+      if (allocated(output%u_csvt_tend)) deallocate(output%u_csvt_tend)
 #endif
 
       if (allocated(output%cld)) deallocate(output%cld)

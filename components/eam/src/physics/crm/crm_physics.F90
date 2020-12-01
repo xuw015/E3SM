@@ -132,13 +132,15 @@ subroutine crm_physics_register()
    ! Setup CRM internal parameters
    call setparm()
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
    do k = 1, crm_nvark
       write(kstr,'(i4)') k
       call cnst_add('CRM_T_AMP_K'//adjustl(trim(kstr)), real(0,r8), real(0,r8), real(0,r8), cnst_ind, &
                     longname='CRM_T_AMP_K'//adjustl(trim(kstr)), readiv=.false., mixtype='dry',cam_outfld=.false.)
       call cnst_add('CRM_Q_AMP_K'//adjustl(trim(kstr)), real(0,r8), real(0,r8), real(0,r8), cnst_ind, &
                     longname='CRM_Q_AMP_K'//adjustl(trim(kstr)), readiv=.false., mixtype='dry',cam_outfld=.false.)
+      call cnst_add('CRM_U_AMP_K'//adjustl(trim(kstr)), real(0,r8), real(0,r8), real(0,r8), cnst_ind, &
+                    longname='CRM_U_AMP_K'//adjustl(trim(kstr)), readiv=.false., mixtype='dry',cam_outfld=.false.)
    end do
 #endif
 
@@ -248,7 +250,7 @@ subroutine crm_physics_init(state,species_class)
    logical :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
    character(len=4)  :: kstr
-   integer :: idx_csvt_t, idx_csvt_q
+   integer :: idx_csvt_t, idx_csvt_q, idx_csvt_u
    integer :: lchnk
    integer :: ncol
    !----------------------------------------------------------------------------
@@ -291,15 +293,17 @@ subroutine crm_physics_init(state,species_class)
    prec_pcw_idx = pbuf_get_index('PREC_PCW')
    snow_pcw_idx = pbuf_get_index('SNOW_PCW')
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
    do k = 1, crm_nvark
       write(kstr,'(i4)') k
       call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
       call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+      call cnst_get_ind( 'CRM_U_AMP_K'//adjustl(trim(kstr)), idx_csvt_u )
       do lchnk = begchunk, endchunk
          ncol  = state(lchnk)%ncol
          state(lchnk)%q(:ncol,:pver,idx_csvt_t) = 0
          state(lchnk)%q(:ncol,:pver,idx_csvt_q) = 0
+         state(lchnk)%q(:ncol,:pver,idx_csvt_u) = 0
       end do
    end do
 #endif
@@ -475,7 +479,7 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
    logical(c_bool)             :: crm_accel_uv
    integer                     :: igstep
 
-   integer :: idx_csvt_t, idx_csvt_q
+   integer :: idx_csvt_t, idx_csvt_q, idx_csvt_u
    character(len=4) :: kstr
 
    !------------------------------------------------------------------------------------------------
@@ -867,13 +871,15 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
       end do
 #endif
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       do k = 1, crm_nvark
          write(kstr,'(i4)') k
          call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
          call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         call cnst_get_ind( 'CRM_U_AMP_K'//adjustl(trim(kstr)), idx_csvt_u )
          crm_input%t_csvt(:ncol,:pver,k) = state%q(:ncol,:pver,idx_csvt_t)
          crm_input%q_csvt(:ncol,:pver,k) = state%q(:ncol,:pver,idx_csvt_q)
+         crm_input%u_csvt(:ncol,:pver,k) = state%q(:ncol,:pver,idx_csvt_u)
       end do
 #endif
       !---------------------------------------------------------------------------------------------
@@ -980,19 +986,18 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
       ptend%q(:ncol,:pver,ixcldliq) = crm_output%qcltend(1:ncol,1:pver)
       ptend%q(:ncol,:pver,ixcldice) = crm_output%qiltend(1:ncol,1:pver)
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       do k = 1, crm_nvark
          write(kstr,'(i4)') k
          call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
          call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         call cnst_get_ind( 'CRM_U_AMP_K'//adjustl(trim(kstr)), idx_csvt_u )
          ptend%q(1:ncol,1:pver,idx_csvt_t) = crm_output%t_csvt_tend(1:ncol,1:pver,k)
          ptend%q(1:ncol,1:pver,idx_csvt_q) = crm_output%q_csvt_tend(1:ncol,1:pver,k)
+#if defined(MMF_CSVT_MOM)
+         ptend%q(1:ncol,1:pver,idx_csvt_u) = crm_output%u_csvt_tend(1:ncol,1:pver,k)
+#endif
       end do
-      ! FOR TESTING NEW TRACER - use damping everywhere except a single source columns
-      ! ptend%q(:ncol,:pver,idx_csvt_t) = 0
-      ! ptend%q(:ncol,:pver,idx_csvt_q) = 0
-      ! ptend%q(:ncol,:pver,idx_csvt_t) = (-1_r8/(86400_r8)) * state%q(:ncol,:pver,idx_csvt_t) ! 1 min damping
-      ! if (lchnk==begchunk) ptend%q(1,:pver,idx_csvt_t) = 0.01_r8
 #endif
       !---------------------------------------------------------------------------------------------
       ! Add radiative heating tendency above CRM
@@ -1091,13 +1096,17 @@ subroutine crm_physics_tend(ztodt, state, tend, ptend, pbuf, cam_in, cam_out, &
       ptend%lu           = .FALSE.
       ptend%lv           = .FALSE.
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       do k = 1, crm_nvark
          write(kstr,'(i4)') k
          call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
-         call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
+         call cnst_get_ind( 'CRM_U_AMP_K'//adjustl(trim(kstr)), idx_csvt_u )
          ptend%lq(idx_csvt_t) = .TRUE.
          ptend%lq(idx_csvt_q) = .TRUE.
+#if defined(MMF_CSVT_MOM)
+         ptend%lq(idx_csvt_u) = .TRUE.
+#endif
       end do
 #endif
       !---------------------------------------------------------------------------------------------

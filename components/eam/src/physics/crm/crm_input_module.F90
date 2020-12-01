@@ -43,9 +43,10 @@ module crm_input_module
       real(crm_rknd), allocatable :: vl_esmt(:,:)        ! input v for ESMT
 #endif
 
-#if defined(MMF_VARIANCE_TRANSPORT)
-      real(crm_rknd), allocatable :: t_csvt (:,:,:)         ! CRM output tendency of variance
-      real(crm_rknd), allocatable :: q_csvt (:,:,:)         ! CRM output tendency of variance
+#if defined(MMF_CSVT)
+      real(crm_rknd), allocatable :: t_csvt (:,:,:)      ! CRM input of variance used for forcing tendency
+      real(crm_rknd), allocatable :: q_csvt (:,:,:)      ! CRM input of variance used for forcing tendency
+      real(crm_rknd), allocatable :: u_csvt (:,:,:)      ! CRM input of variance used for forcing tendency
 #endif
 
    contains
@@ -120,11 +121,13 @@ contains
       if (.not. allocated(this%vl_esmt))  allocate(this%vl_esmt(ncrms,nlev))
 #endif
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       if (.not. allocated(this%t_csvt))  allocate(this%t_csvt(ncrms,nlev,crm_nvark))
       if (.not. allocated(this%q_csvt))  allocate(this%q_csvt(ncrms,nlev,crm_nvark))
+      if (.not. allocated(this%u_csvt))  allocate(this%u_csvt(ncrms,nlev,crm_nvark))
       call prefetch(this%t_csvt)
       call prefetch(this%q_csvt)
+      call prefetch(this%u_csvt)
 #endif
 
       ! Initialize
@@ -159,9 +162,10 @@ contains
       this%vl_esmt = 0
 #endif
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       this%t_csvt = 0
       this%q_csvt = 0
+      this%u_csvt = 0
 #endif
 
    end subroutine crm_input_initialize
@@ -203,9 +207,10 @@ contains
       deallocate(this%vl_esmt)
 #endif
 
-#if defined(MMF_VARIANCE_TRANSPORT)
+#if defined(MMF_CSVT)
       deallocate(this%t_csvt)
       deallocate(this%q_csvt)
+      deallocate(this%u_csvt)
 #endif
 
    end subroutine crm_input_finalize 

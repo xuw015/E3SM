@@ -1541,7 +1541,7 @@ else {
         # if (defined $opts{'use_MMF'}) {
         if (defined $opts{'crm_ntrc'})   { 
             my $crm_ntrc = $cfg_ref->get('crm_ntrc');
-            $nadv += $crm_ntrc*2;
+            $nadv += $crm_ntrc*3; # add ntrc for t, q, and u variables
             if ($print>=2) { print "Advected variance constituent added for MMF: $crm_ntrc$eol"; }
         }
 
