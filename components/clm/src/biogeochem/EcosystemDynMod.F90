@@ -494,6 +494,7 @@ contains
   subroutine EcosystemDynNoLeaching2(bounds,                                  &
        num_soilc, filter_soilc,                                                 &
        num_soilp, filter_soilp, num_pcropp, filter_pcropp, doalb,               &
+       num_ppercropp, filter_ppercropp,                                         &
        cnstate_vars, carbonflux_vars, carbonstate_vars,                         &
        c13_carbonflux_vars, c13_carbonstate_vars,                               &
        c14_carbonflux_vars, c14_carbonstate_vars,                               &
@@ -554,6 +555,8 @@ contains
     integer                  , intent(in)    :: filter_soilp(:)   ! filter for soil patches
     integer                  , intent(in)    :: num_pcropp        ! number of prog. crop patches in filter
     integer                  , intent(in)    :: filter_pcropp(:)  ! filter for prognostic crop patches
+    integer                  , intent(in)    :: num_ppercropp     ! number of prog perennial crop patches in filter
+    integer                  , intent(in)    :: filter_ppercropp(:) ! filter for prognostic perennial crop patches
     logical                  , intent(in)    :: doalb             ! true = surface albedo calculation time step
     type(cnstate_type)       , intent(inout) :: cnstate_vars
     type(carbonflux_type)    , intent(inout) :: carbonflux_vars
@@ -625,7 +628,7 @@ contains
 
        call t_startf('Phenology')
        call Phenology(num_soilc, filter_soilc, num_soilp, filter_soilp, &
-            num_pcropp, filter_pcropp, doalb, atm2lnd_vars, &
+            num_pcropp, filter_pcropp, num_ppercropp, filter_ppercropp, doalb, atm2lnd_vars, &
             waterstate_vars, temperature_vars, crop_vars, canopystate_vars, soilstate_vars, &
             cnstate_vars, carbonstate_vars, carbonflux_vars, &
             nitrogenstate_vars, nitrogenflux_vars,&
