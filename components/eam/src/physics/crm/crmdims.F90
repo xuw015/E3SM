@@ -15,6 +15,12 @@ module crmdims
     real(crm_rknd), parameter :: crm_dy=crm_dx
     real(crm_rknd), parameter :: crm_dt=CRM_DT
 
-    integer, parameter :: crm_nvark=CRM_NTRC
+#if defined(MMF_BCVT)
+    ! use 1 for bulk convective variance transport 
+    integer, parameter :: crm_nvark=1 
+#else
+    ! specify number of tracers for spectral convective variance transport
+    integer, parameter :: crm_nvark=CRM_NTRC 
+#endif
 
 end module crmdims

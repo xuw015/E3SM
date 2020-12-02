@@ -1,121 +1,164 @@
 module variance_transport_mod
-#if defined(MMF_CSVT)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
 !-------------------------------------------------------------------------------
 ! Purpose:
 !
-! Convective Scale Variance Transport (CSVT)
 ! This module supports the capability of transporting the CRM's internal 
-! variance on the large-scale host model's grid using individual wavenumbers
-! from a truncated Fouier transformed version of the main prognostics variables.
+! variance on the large-scale host model grid. Two methods are implemented:
+! 
+!   1) Spectral Convective Variance Transport (SCVT) 
+!      use tracers for individual wavenumbers of the prognostics 
+!      variables via Fouier transform
+! 
+!   2) Bulk Convective Variance Transport (BCVT) - i.e. "the Dutch method"
+!      Calculate a single "bulk" representation of the CRM variance 
+!      and use this for the tracer on the GCM grid
 !
+! Additional experimental options are available to transport of CRM momentum 
+! variance, but we have concerns that this may be problematic due to the 
+! pressure solver needed for the anelastic approximation.
+! 
 ! Author: Walter Hannah - Lawrence Livermore National Lab
 !-------------------------------------------------------------------------------
    use params_kind,  only: crm_rknd
    use crmdims,      only: crm_nvark
-   use grid,         only: nzm
+   use grid,         only: nx,ny,nzm,dtn
    use params,       only: pi
    use openacc_utils
 
    implicit none
 
-   public allocate_CSVT
-   public deallocate_CSVT
-   public CSVT_diagnose
-   public CSVT_forcing
+   public allocate_CVT
+   public deallocate_CVT
+   public CVT_diagnose
+   public CVT_forcing
 
-#if defined(MMF_CSVT_MOM)
-   public CSVT_diagnose_mom
-   public CSVT_forcing_mom
+#if defined(MMF_SCVT_MOM) || defined(MMF_BCVT_MOM)
+   public CVT_diagnose_mom
+   public CVT_forcing_mom
 #endif
 
-   real(crm_rknd), allocatable :: t_csvt_amp_tend(:,:,:)  ! forcing tendency of LSE amp per wavenumber
-   real(crm_rknd), allocatable :: q_csvt_amp_tend(:,:,:)  ! forcing tendency of QT  amp per wavenumber
-   real(crm_rknd), allocatable :: u_csvt_amp_tend(:,:,:)  ! forcing tendency of U   amp per wavenumber
 
-   real(crm_rknd), allocatable :: t_csvt_amp(:,:,:)       ! LSE amplitude per wavenumber
-   real(crm_rknd), allocatable :: q_csvt_amp(:,:,:)       ! QT  amplitude per wavenumber
-   real(crm_rknd), allocatable :: u_csvt_amp(:,:,:)       ! U   amplitude per wavenumber
+   real(crm_rknd), allocatable :: t_cvt_tend(:,:,:)  ! forcing tendency of LSE amp per wavenumber
+   real(crm_rknd), allocatable :: q_cvt_tend(:,:,:)  ! forcing tendency of QT  amp per wavenumber
+   real(crm_rknd), allocatable :: u_cvt_tend(:,:,:)  ! forcing tendency of U   amp per wavenumber
 
-   real(crm_rknd), allocatable :: t_csvt_phs(:,:,:)       ! LSE phase per wavenumber
-   real(crm_rknd), allocatable :: q_csvt_phs(:,:,:)       ! QT  phase per wavenumber
-   real(crm_rknd), allocatable :: u_csvt_phs(:,:,:)       ! U   phase per wavenumber
+   real(crm_rknd), allocatable :: t_cvt(:,:,:)       ! LSE amplitude per wavenumber
+   real(crm_rknd), allocatable :: q_cvt(:,:,:)       ! QT  amplitude per wavenumber
+   real(crm_rknd), allocatable :: u_cvt(:,:,:)       ! U   amplitude per wavenumber
+
+#if defined(MMF_SCVT)
+   real(crm_rknd), allocatable :: t_cvt_phs(:,:,:)   ! LSE phase per wavenumber
+   real(crm_rknd), allocatable :: q_cvt_phs(:,:,:)   ! QT  phase per wavenumber
+   real(crm_rknd), allocatable :: u_cvt_phs(:,:,:)   ! U   phase per wavenumber
+#endif
+
+#if defined(MMF_BCVT)
+   real(crm_rknd), allocatable :: t_cvt_pert(:,:,:,:)  ! LSE perturbation from horizontal mean
+   real(crm_rknd), allocatable :: q_cvt_pert(:,:,:,:)  ! QT  perturbation from horizontal mean
+   real(crm_rknd), allocatable :: u_cvt_pert(:,:,:,:)  ! U   perturbation from horizontal mean
+#endif
 
 contains
 
 !===============================================================================
 !===============================================================================
-subroutine allocate_CSVT(ncrms)
+subroutine allocate_CVT(ncrms)
    !----------------------------------------------------------------------------
-   ! Purpose: Allocate and initialize variables
+   ! Purpose: Allocate and initialize CVT variables
    !----------------------------------------------------------------------------
    implicit none
    integer, intent(in) :: ncrms
 
-   allocate( t_csvt_amp_tend( ncrms, nzm, crm_nvark ) )
-   allocate( q_csvt_amp_tend( ncrms, nzm, crm_nvark ) )
-   allocate( u_csvt_amp_tend( ncrms, nzm, crm_nvark ) )
+   allocate( t_cvt_tend( ncrms, nzm, crm_nvark ) )
+   allocate( q_cvt_tend( ncrms, nzm, crm_nvark ) )
 
-   allocate( t_csvt_amp( ncrms, nzm, crm_nvark ) )
-   allocate( q_csvt_amp( ncrms, nzm, crm_nvark ) )
-   allocate( u_csvt_amp( ncrms, nzm, crm_nvark ) )
+   allocate( t_cvt( ncrms, nzm, crm_nvark ) )
+   allocate( q_cvt( ncrms, nzm, crm_nvark ) )   
 
-   allocate( t_csvt_phs( ncrms, nzm, crm_nvark ) )
-   allocate( q_csvt_phs( ncrms, nzm, crm_nvark ) )
-   allocate( u_csvt_phs( ncrms, nzm, crm_nvark ) )
+   t_cvt_tend(:,:,:) = 0.0_crm_rknd
+   q_cvt_tend(:,:,:) = 0.0_crm_rknd
 
-   call prefetch( t_csvt_amp_tend )
-   call prefetch( q_csvt_amp_tend )
-   call prefetch( u_csvt_amp_tend )
+   t_cvt(:,:,:)      = 0.0_crm_rknd
+   q_cvt(:,:,:)      = 0.0_crm_rknd
 
-   call prefetch( t_csvt_amp )
-   call prefetch( q_csvt_amp )
-   call prefetch( u_csvt_amp )
-   
-   call prefetch( t_csvt_phs )
-   call prefetch( q_csvt_phs )
-   call prefetch( u_csvt_phs )
+#if defined(MMF_SCVT)
+   allocate( t_cvt_phs( ncrms, nzm, crm_nvark ) )
+   allocate( q_cvt_phs( ncrms, nzm, crm_nvark ) )
+   t_cvt_phs(:,:,:)  = 0.0_crm_rknd
+   q_cvt_phs(:,:,:)  = 0.0_crm_rknd
+#endif
 
-   t_csvt_amp_tend(:,:,:) = 0.0_crm_rknd
-   q_csvt_amp_tend(:,:,:) = 0.0_crm_rknd
-   u_csvt_amp_tend(:,:,:) = 0.0_crm_rknd
+#if defined(MMF_BCVT)
+   allocate( t_cvt_pert( ncrms, nx, ny, nzm ) )
+   allocate( q_cvt_pert( ncrms, nx, ny, nzm ) )
+   t_cvt_pert(:,:,:,:)  = 0.0_crm_rknd
+   q_cvt_pert(:,:,:,:)  = 0.0_crm_rknd
+#endif
 
-   t_csvt_amp(:,:,:)      = 0.0_crm_rknd
-   q_csvt_amp(:,:,:)      = 0.0_crm_rknd
-   u_csvt_amp(:,:,:)      = 0.0_crm_rknd
 
-   t_csvt_phs(:,:,:)      = 0.0_crm_rknd
-   q_csvt_phs(:,:,:)      = 0.0_crm_rknd
-   u_csvt_phs(:,:,:)      = 0.0_crm_rknd
+#if defined(MMF_SCVT_MOM) || defined(MMF_BCVT_MOM)
+   allocate( u_cvt_tend( ncrms, nzm, crm_nvark ) )
+   allocate( u_cvt( ncrms, nzm, crm_nvark ) )
+   u_cvt_tend(:,:,:) = 0.0_crm_rknd
+   u_cvt(:,:,:)      = 0.0_crm_rknd
+#if defined(MMF_SCVT_MOM)
+   allocate( u_cvt_phs( ncrms, nzm, crm_nvark ) )
+   u_cvt_phs(:,:,:)  = 0.0_crm_rknd
+#endif
+#if defined(MMF_BCVT_MOM)
+   allocate( u_cvt_pert( ncrms, nx, ny, nzm ) )
+   u_cvt_pert(:,:,:,:)  = 0.0_crm_rknd
+#endif
+#endif /* MMF_SCVT_MOM || MMF_BCVT_MOM */
 
-end subroutine allocate_CSVT
+end subroutine allocate_CVT
 
 !===============================================================================
 !===============================================================================
-subroutine deallocate_CSVT()
+subroutine deallocate_CVT()
    !----------------------------------------------------------------------------
-   ! Purpose: Deallocate variables
+   ! Purpose: Deallocate CVT variables
    !----------------------------------------------------------------------------
-   deallocate( t_csvt_amp_tend )
-   deallocate( q_csvt_amp_tend )
-   deallocate( u_csvt_amp_tend )
+   deallocate( t_cvt_tend )
+   deallocate( q_cvt_tend )
 
-   deallocate( t_csvt_amp )
-   deallocate( q_csvt_amp )
-   deallocate( u_csvt_amp )
+   deallocate( t_cvt )
+   deallocate( q_cvt )
    
-   deallocate( t_csvt_phs )
-   deallocate( q_csvt_phs )
-   deallocate( u_csvt_phs )
+#if defined(MMF_SCVT)
+   deallocate( t_cvt_phs )
+   deallocate( q_cvt_phs )
+#endif
 
-end subroutine deallocate_CSVT
+#if defined(MMF_BCVT)
+   deallocate( t_cvt_pert )
+   deallocate( q_cvt_pert )
+#endif
+
+#if defined(MMF_SCVT_MOM) || defined(MMF_BCVT_MOM)
+   deallocate( u_cvt_tend )
+   deallocate( u_cvt )
+#if defined(MMF_SCVT_MOM)
+   deallocate( u_cvt_phs )
+#endif
+#if defined(MMF_BCVT_MOM)
+   deallocate( u_cvt_pert )
+#endif
+#endif /* MMF_SCVT_MOM || MMF_BCVT_MOM */
+   
+end subroutine deallocate_CVT
 
 !===============================================================================
 !===============================================================================
-subroutine CSVT_diagnose(ncrms)
+
+#if defined(MMF_SCVT)
+
+subroutine CVT_diagnose(ncrms)
    !----------------------------------------------------------------------------
    ! Purpose: Diagnose amplitude for each wavenumber for variance transport
+   ! spectral version
    !----------------------------------------------------------------------------
-   use grid,      only: nx,ny
    use crmdims,   only: crm_dx
    use vars,      only: t,qv,qcl,qci
    use fftpack51D
@@ -137,52 +180,67 @@ subroutine CSVT_diagnose(ncrms)
 
    ! initialization for FFT
    call rfft1i(nx,wsave,lensav,ier)
-   if(ier /= 0) write(0,*) 'ERROR: rfftmi(): CSVT_diagnose - FFT initialization error ',ier
+   if(ier /= 0) write(0,*) 'ERROR: rfftmi(): CVT_diagnose - FFT initialization error ',ier
 
+   !----------------------------------------------------------------------------
    ! diagnose amplitude for each wavenumber 
+   !----------------------------------------------------------------------------
    !$acc parallel loop collapse(3) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
          do icrm = 1,ncrms
 
+            !-------------------------------------------------------------------
             ! initialize FFT input
+            !-------------------------------------------------------------------
             do i = 1,nx
                fft_out_t(i) = t(icrm,i,j,k)
                ! fft_out_q(i) = qv(icrm,i,j,k)
                fft_out_q(i) = qv(icrm,i,j,k)+qcl(icrm,i,j,k)+qci(icrm,i,j,k)
             end do
 
+            !-------------------------------------------------------------------
             ! do the forward transform
+            !-------------------------------------------------------------------
             call rfft1f( nx, 1, fft_out_t(:), nx, wsave, lensav, work(:), nx, ier )
-            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CSVT_diagnose - fft_out_t ',ier
+            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CVT_diagnose - fft_out_t ',ier
 
             call rfft1f( nx, 1, fft_out_q(:), nx, wsave, lensav, work(:), nx, ier )
-            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CSVT_diagnose - fft_out_q ',ier
+            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CVT_diagnose - fft_out_q ',ier
 
+            !-------------------------------------------------------------------
             ! calculate amplitude of each wavenumber
+            !-------------------------------------------------------------------
             do i = 1,crm_nvark
                ! wave_num(i) = nx/crm_dx * (real(i,crm_rknd)/real(nx,crm_rknd))
                ! phase
-               t_csvt_phs(icrm,k,i) = atan2( fft_out_t(2*i+1), fft_out_t(2*i) )
-               q_csvt_phs(icrm,k,i) = atan2( fft_out_q(2*i+1), fft_out_q(2*i) )
+               t_cvt_phs(icrm,k,i) = atan2( fft_out_t(2*i+1), fft_out_t(2*i) )
+               q_cvt_phs(icrm,k,i) = atan2( fft_out_q(2*i+1), fft_out_q(2*i) )
                ! amplitude
-               t_csvt_amp(icrm,k,i) = sqrt( fft_out_t(2*i)**2. + fft_out_t(2*i+1)**2. )
-               q_csvt_amp(icrm,k,i) = sqrt( fft_out_q(2*i)**2. + fft_out_q(2*i+1)**2. )
+               t_cvt(icrm,k,i) = sqrt( fft_out_t(2*i)**2. + fft_out_t(2*i+1)**2. )
+               q_cvt(icrm,k,i) = sqrt( fft_out_q(2*i)**2. + fft_out_q(2*i+1)**2. )
             end do
 
          end do
       end do
    end do
 
-end subroutine CSVT_diagnose
+   !----------------------------------------------------------------------------
+   ! call momentum diagnostic routine
+   !----------------------------------------------------------------------------
+#if defined(MMF_SCVT_MOM)
+   call CVT_diagnose_mom(ncrms)
+#endif
+
+end subroutine CVT_diagnose
 
 !===============================================================================
 !===============================================================================
-subroutine CSVT_forcing(ncrms)
+subroutine CVT_forcing(ncrms)
    !----------------------------------------------------------------------------
    ! Purpose: Calculate forcing for variance injection and apply limiters
+   ! spectral version
    !----------------------------------------------------------------------------
-   use grid,         only: nx,ny,dtn
    use crmdims,      only: crm_dx
    use vars,         only: t
    use microphysics, only: micro_field, index_water_vapor
@@ -201,6 +259,9 @@ subroutine CSVT_forcing(ncrms)
    allocate( ttend_loc( ncrms, nx, ny, nzm ) )
    allocate( qtend_loc( ncrms, nx, ny, nzm ) )
 
+   !----------------------------------------------------------------------------
+   ! calculate local tendencies
+   !----------------------------------------------------------------------------
    !$acc parallel loop collapse(4) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
@@ -211,14 +272,17 @@ subroutine CSVT_forcing(ncrms)
                angle = (2*pi)*(i-1)/nx
                do iwn = 1,crm_nvark
                   freq = nx/crm_dx * (real(i,crm_rknd)/real(nx,crm_rknd))
-                  ttend_loc(icrm,i,j,k) = ttend_loc(icrm,i,j,k) + t_csvt_amp_tend(icrm,k,iwn)*cos(freq*angle-t_csvt_phs(icrm,k,iwn))
-                  qtend_loc(icrm,i,j,k) = qtend_loc(icrm,i,j,k) + q_csvt_amp_tend(icrm,k,iwn)*cos(freq*angle-q_csvt_phs(icrm,k,iwn))
+                  ttend_loc(icrm,i,j,k) = ttend_loc(icrm,i,j,k) + t_cvt_tend(icrm,k,iwn)*cos(freq*angle-t_cvt_phs(icrm,k,iwn))
+                  qtend_loc(icrm,i,j,k) = qtend_loc(icrm,i,j,k) + q_cvt_tend(icrm,k,iwn)*cos(freq*angle-q_cvt_phs(icrm,k,iwn))
                end do
             end do
          end do
       end do
    end do
 
+   !----------------------------------------------------------------------------
+   ! apply local tendencies
+   !----------------------------------------------------------------------------
    !$acc parallel loop collapse(4) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
@@ -231,19 +295,248 @@ subroutine CSVT_forcing(ncrms)
       end do
    end do
 
+   !----------------------------------------------------------------------------
+   ! clean up
+   !----------------------------------------------------------------------------
    deallocate( ttend_loc )
    deallocate( qtend_loc )
 
-end subroutine CSVT_forcing
+   !----------------------------------------------------------------------------
+   ! momentum forcing
+   !----------------------------------------------------------------------------
+
+#if defined(MMF_SCVT_MOM)
+   call CVT_forcing_mom(ncrms)
+#endif
+
+end subroutine CVT_forcing
+
+#endif /* MMF_SCVT */
 
 !===============================================================================
 !===============================================================================
-#if defined(MMF_CSVT_MOM)
-subroutine CSVT_diagnose_mom(ncrms)
+
+#if defined(MMF_BCVT)
+
+subroutine CVT_diagnose(ncrms)
    !----------------------------------------------------------------------------
    ! Purpose: Diagnose amplitude for each wavenumber for variance transport
+   ! bulk version
    !----------------------------------------------------------------------------
-   use grid,      only: nx,ny
+   use crmdims,   only: crm_dx
+   use vars,      only: t,qv,qcl,qci
+   implicit none
+
+   ! interface arguments
+   integer, intent(in) :: ncrms
+
+   ! local variables
+   real(crm_rknd), allocatable :: t_mean(:,:)
+   real(crm_rknd), allocatable :: q_mean(:,:)
+   real(crm_rknd) :: tmp
+   real(crm_rknd) :: factor_xy
+   integer :: i, j, k, icrm   ! loop iterators
+   !----------------------------------------------------------------------------
+
+   allocate( t_mean( ncrms, nzm ) )
+   allocate( q_mean( ncrms, nzm ) )
+
+   factor_xy = 1._crm_rknd/dble(nx*ny)
+
+   !----------------------------------------------------------------------------
+   ! calculate horizontal mean
+   !----------------------------------------------------------------------------
+   !$acc parallel loop collapse(2) async(asyncid)
+   do k = 1,nzm
+      do icrm = 1,ncrms
+         t_mean(icrm,k) = 0.
+         q_mean(icrm,k) = 0.
+         t_cvt(icrm,k,1) = 0.
+         q_cvt(icrm,k,1) = 0.
+      end do
+   end do
+
+   !$acc parallel loop collapse(4) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do i = 1,nx
+            do icrm = 1,ncrms
+               !$acc atomic update
+               t_mean(icrm,k) = t_mean(icrm,k) + t(icrm,i,j,k)
+               tmp = qv(icrm,i,j,k)+qcl(icrm,i,j,k)+qci(icrm,i,j,k)
+               !$acc atomic update
+               q_mean(icrm,k) = q_mean(icrm,k) + tmp
+            end do
+         end do
+      end do
+   end do
+
+   !$acc parallel loop collapse(2) async(asyncid)
+   do k = 1,nzm
+      do icrm = 1,ncrms
+         t_mean(icrm,k) = t_mean(icrm,k) * factor_xy
+         q_mean(icrm,k) = q_mean(icrm,k) * factor_xy
+      end do
+   end do
+
+   !----------------------------------------------------------------------------
+   ! calculate anomalies
+   !----------------------------------------------------------------------------
+   !$acc parallel loop collapse(4) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do i = 1,nx
+            do icrm = 1,ncrms
+               t_cvt_pert(icrm,i,j,k) = t(icrm,i,j,k) - t_mean(icrm,k)
+               tmp = qv(icrm,i,j,k) + qcl(icrm,i,j,k) + qci(icrm,i,j,k)
+               q_cvt_pert(icrm,i,j,k) = tmp           - q_mean(icrm,k)
+            end do
+         end do
+      end do
+   end do
+
+   !----------------------------------------------------------------------------
+   ! calculate variance
+   !----------------------------------------------------------------------------
+   !$acc parallel loop collapse(4) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do i = 1,nx
+            do icrm = 1,ncrms
+               t_cvt(icrm,k,1) = t_cvt(icrm,k,1) + t_cvt_pert(icrm,i,j,k) * t_cvt_pert(icrm,i,j,k)
+               q_cvt(icrm,k,1) = q_cvt(icrm,k,1) + q_cvt_pert(icrm,i,j,k) * q_cvt_pert(icrm,i,j,k)
+            end do
+         end do
+      end do
+   end do
+
+   !$acc parallel loop collapse(2) async(asyncid)
+   do k = 1,nzm
+      do icrm = 1,ncrms
+         t_cvt(icrm,k,1) = t_cvt(icrm,k,1) * factor_xy
+         q_cvt(icrm,k,1) = q_cvt(icrm,k,1) * factor_xy
+      end do
+   end do
+
+   !----------------------------------------------------------------------------
+   ! clean up
+   !----------------------------------------------------------------------------
+   deallocate( t_mean )
+   deallocate( q_mean )
+
+   !----------------------------------------------------------------------------
+   ! call momentum variance diagnostic routine
+   !----------------------------------------------------------------------------
+#if defined(MMF_BCVT_MOM)
+   call CVT_diagnose_mom(ncrms)
+#endif
+
+end subroutine CVT_diagnose
+
+!===============================================================================
+!===============================================================================
+subroutine CVT_forcing(ncrms)
+   !----------------------------------------------------------------------------
+   ! Purpose: Calculate forcing for variance injection and apply limiters
+   ! bulk version
+   !----------------------------------------------------------------------------
+   use crmdims,      only: crm_dx
+   use vars,         only: t
+   use microphysics, only: micro_field, index_water_vapor
+   implicit none
+
+   ! interface arguments
+   integer, intent(in) :: ncrms
+
+   ! local variables
+   real(crm_rknd), parameter :: pert_scale_min = 0.9
+   real(crm_rknd), parameter :: pert_scale_max = 1.1
+   real(crm_rknd), allocatable :: t_pert_scale(:,:)
+   real(crm_rknd), allocatable :: q_pert_scale(:,:)
+   real(crm_rknd), allocatable :: ttend_loc(:,:,:,:)
+   real(crm_rknd), allocatable :: qtend_loc(:,:,:,:)
+   integer :: i, j, k, icrm   ! loop iterators
+   !----------------------------------------------------------------------------
+
+   allocate( t_pert_scale( ncrms, nzm ) )
+   allocate( q_pert_scale( ncrms, nzm ) )
+
+   allocate( ttend_loc( ncrms, nx, ny, nzm ) )
+   allocate( qtend_loc( ncrms, nx, ny, nzm ) )
+
+   !----------------------------------------------------------------------------
+   ! calculate local tendencies scaled by local perturbations
+   !----------------------------------------------------------------------------
+   !$acc parallel loop collapse(2) async(asyncid)
+   do k=1,nzm
+      do icrm = 1 , ncrms
+         t_pert_scale(icrm,k) = sqrt( 1.0_crm_rknd + dtn * t_cvt_tend(icrm,k,1) / t_cvt(icrm,k,1) )
+         q_pert_scale(icrm,k) = sqrt( 1.0_crm_rknd + dtn * q_cvt_tend(icrm,k,1) / q_cvt(icrm,k,1) )
+         ! enforce minimum scaling
+         t_pert_scale(icrm,k) = max( t_pert_scale(icrm,k), pert_scale_min )
+         q_pert_scale(icrm,k) = max( q_pert_scale(icrm,k), pert_scale_min )
+         ! enforce maximum scaling
+         t_pert_scale(icrm,k) = min( t_pert_scale(icrm,k), pert_scale_max )
+         q_pert_scale(icrm,k) = min( q_pert_scale(icrm,k), pert_scale_max )
+      end do
+   end do
+
+   !$acc parallel loop collapse(4) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do i = 1,nx
+            do icrm = 1,ncrms
+               ttend_loc(icrm,i,j,k) = ( t_pert_scale(icrm,k) * t_cvt_pert(icrm,i,j,k) - t_cvt_pert(icrm,i,j,k) ) / dtn
+               qtend_loc(icrm,i,j,k) = ( q_pert_scale(icrm,k) * q_cvt_pert(icrm,i,j,k) - q_cvt_pert(icrm,i,j,k) ) / dtn
+            end do
+         end do
+      end do
+   end do
+
+   !----------------------------------------------------------------------------
+   ! apply tendencies
+   !----------------------------------------------------------------------------
+   !$acc parallel loop collapse(4) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do i = 1,nx
+            do icrm = 1,ncrms
+               t(icrm,i,j,k) = t(icrm,i,j,k) + ttend_loc(icrm,i,j,k) * dtn
+               micro_field(icrm,i,j,k,index_water_vapor) = micro_field(icrm,i,j,k,index_water_vapor) + qtend_loc(icrm,i,j,k) * dtn
+            end do
+         end do
+      end do
+   end do
+
+   !----------------------------------------------------------------------------
+   ! clean up
+   !----------------------------------------------------------------------------
+   deallocate( ttend_loc )
+   deallocate( qtend_loc )
+   deallocate( t_pert_scale )
+   deallocate( q_pert_scale )
+
+   !----------------------------------------------------------------------------
+   ! apply momentum variance forcing
+   !----------------------------------------------------------------------------
+#if defined(MMF_BCVT_MOM)
+   call CVT_forcing_mom(ncrms)
+#endif
+
+end subroutine CVT_forcing
+
+#endif /* MMF_BCVT */
+
+!===============================================================================
+!===============================================================================
+
+#if defined(MMF_SCVT_MOM)
+
+subroutine CVT_diagnose_mom(ncrms)
+   !----------------------------------------------------------------------------
+   ! Purpose: Diagnose amplitude for each wavenumber for variance transport
+   ! spectral version
+   !----------------------------------------------------------------------------
    use crmdims,   only: crm_dx
    use vars,      only: u
    use fftpack51D
@@ -261,11 +554,15 @@ subroutine CSVT_diagnose_mom(ncrms)
    integer :: ier             ! error return code
    !----------------------------------------------------------------------------
 
+   !----------------------------------------------------------------------------
    ! initialization for FFT
+   !----------------------------------------------------------------------------
    call rfft1i(nx,wsave,lensav,ier)
-   if(ier /= 0) write(0,*) 'ERROR: rfftmi(): CSVT_diagnose - FFT initialization error ',ier
+   if(ier /= 0) write(0,*) 'ERROR: rfftmi(): CVT_diagnose - FFT initialization error ',ier
 
+   !----------------------------------------------------------------------------
    ! diagnose amplitude for each wavenumber 
+   !----------------------------------------------------------------------------
    !$acc parallel loop collapse(3) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
@@ -278,29 +575,30 @@ subroutine CSVT_diagnose_mom(ncrms)
 
             ! do the forward transform
             call rfft1f( nx, 1, fft_out_u(:), nx, wsave, lensav, work(:), nx, ier )
-            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CSVT_diagnose - fft_out_u ',ier
+            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CVT_diagnose - fft_out_u ',ier
 
             ! calculate amplitude of each wavenumber
             do i = 1,crm_nvark
                ! phase
-               u_csvt_phs(icrm,k,i) = atan2( fft_out_u(2*i+1), fft_out_u(2*i) )
+               u_cvt_phs(icrm,k,i) = atan2( fft_out_u(2*i+1), fft_out_u(2*i) )
                ! amplitude
-               u_csvt_amp(icrm,k,i) = sqrt( fft_out_u(2*i)**2. + fft_out_u(2*i+1)**2. )
+               u_cvt(icrm,k,i) = sqrt( fft_out_u(2*i)**2. + fft_out_u(2*i+1)**2. )
             end do
 
          end do
       end do
    end do
 
-end subroutine CSVT_diagnose_mom
+end subroutine CVT_diagnose_mom
 
 !===============================================================================
 !===============================================================================
-subroutine CSVT_forcing_mom(ncrms)
+subroutine CVT_forcing_mom(ncrms)
    !----------------------------------------------------------------------------
    ! Purpose: Calculate forcing for variance injection and apply limiters
+   ! spectral version
    !----------------------------------------------------------------------------
-   use grid,         only: nx,ny,dtn,na
+   use grid,         only: na
    use crmdims,      only: crm_dx
    use vars,         only: u,dudt
    implicit none
@@ -316,6 +614,9 @@ subroutine CSVT_forcing_mom(ncrms)
 
    allocate( utend_loc( ncrms, nx, ny, nzm ) )
 
+   !----------------------------------------------------------------------------
+   ! calculate local tendencies
+   !----------------------------------------------------------------------------
    !$acc parallel loop collapse(4) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
@@ -325,13 +626,16 @@ subroutine CSVT_forcing_mom(ncrms)
                angle = (2*pi)*(i-1)/nx
                do iwn = 1,crm_nvark
                   freq = nx/crm_dx * (real(i,crm_rknd)/real(nx,crm_rknd))
-                  utend_loc(icrm,i,j,k) = utend_loc(icrm,i,j,k) + u_csvt_amp_tend(icrm,k,iwn)*cos(freq*angle-u_csvt_phs(icrm,k,iwn))
+                  utend_loc(icrm,i,j,k) = utend_loc(icrm,i,j,k) + u_cvt_tend(icrm,k,iwn)*cos(freq*angle-u_cvt_phs(icrm,k,iwn))
                end do
             end do
          end do
       end do
    end do
 
+   !----------------------------------------------------------------------------
+   ! apply local tendencies
+   !----------------------------------------------------------------------------
    !$acc parallel loop collapse(4) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
@@ -344,13 +648,43 @@ subroutine CSVT_forcing_mom(ncrms)
       end do
    end do
 
+   !----------------------------------------------------------------------------
+   ! clean up
+   !----------------------------------------------------------------------------
+
    deallocate( utend_loc )
 
-end subroutine CSVT_forcing_mom
+end subroutine CVT_forcing_mom
 
-#endif
+#endif /* MMF_SCVT_MOM */
 
 !===============================================================================
 !===============================================================================
-#endif
+
+#if defined(MMF_BCVT_MOM)
+
+! subroutine BCVT_diagnose_mom(ncrms)
+!    !----------------------------------------------------------------------------
+!    ! Purpose: Diagnose amplitude for each wavenumber for variance transport
+!    ! bulk version
+!    !----------------------------------------------------------------------------
+
+! end subroutine CVT_diagnose_bulk_mom
+
+!===============================================================================
+!===============================================================================
+! subroutine CVT_forcing_mom(ncrms)
+!    !----------------------------------------------------------------------------
+!    ! Purpose: Calculate forcing for variance injection and apply limiters
+!    ! bulk version
+!    !----------------------------------------------------------------------------
+
+
+! end subroutine CVT_forcing_mom
+
+#endif /* MMF_BCVT_MOM */
+
+!===============================================================================
+!===============================================================================
+#endif /* MMF_SCVT || MMF_BCVT */
 end module variance_transport_mod

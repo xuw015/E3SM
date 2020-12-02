@@ -43,10 +43,10 @@ module crm_input_module
       real(crm_rknd), allocatable :: vl_esmt(:,:)        ! input v for ESMT
 #endif
 
-#if defined(MMF_CSVT)
-      real(crm_rknd), allocatable :: t_csvt (:,:,:)      ! CRM input of variance used for forcing tendency
-      real(crm_rknd), allocatable :: q_csvt (:,:,:)      ! CRM input of variance used for forcing tendency
-      real(crm_rknd), allocatable :: u_csvt (:,:,:)      ! CRM input of variance used for forcing tendency
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+      real(crm_rknd), allocatable :: t_cvt (:,:,:)      ! CRM input of variance used for forcing tendency
+      real(crm_rknd), allocatable :: q_cvt (:,:,:)      ! CRM input of variance used for forcing tendency
+      real(crm_rknd), allocatable :: u_cvt (:,:,:)      ! CRM input of variance used for forcing tendency
 #endif
 
    contains
@@ -121,13 +121,13 @@ contains
       if (.not. allocated(this%vl_esmt))  allocate(this%vl_esmt(ncrms,nlev))
 #endif
 
-#if defined(MMF_CSVT)
-      if (.not. allocated(this%t_csvt))  allocate(this%t_csvt(ncrms,nlev,crm_nvark))
-      if (.not. allocated(this%q_csvt))  allocate(this%q_csvt(ncrms,nlev,crm_nvark))
-      if (.not. allocated(this%u_csvt))  allocate(this%u_csvt(ncrms,nlev,crm_nvark))
-      call prefetch(this%t_csvt)
-      call prefetch(this%q_csvt)
-      call prefetch(this%u_csvt)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+      if (.not. allocated(this%t_cvt))  allocate(this%t_cvt(ncrms,nlev,crm_nvark))
+      if (.not. allocated(this%q_cvt))  allocate(this%q_cvt(ncrms,nlev,crm_nvark))
+      if (.not. allocated(this%u_cvt))  allocate(this%u_cvt(ncrms,nlev,crm_nvark))
+      call prefetch(this%t_cvt)
+      call prefetch(this%q_cvt)
+      call prefetch(this%u_cvt)
 #endif
 
       ! Initialize
@@ -162,10 +162,10 @@ contains
       this%vl_esmt = 0
 #endif
 
-#if defined(MMF_CSVT)
-      this%t_csvt = 0
-      this%q_csvt = 0
-      this%u_csvt = 0
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+      this%t_cvt = 0
+      this%q_cvt = 0
+      this%u_cvt = 0
 #endif
 
    end subroutine crm_input_initialize
@@ -207,10 +207,10 @@ contains
       deallocate(this%vl_esmt)
 #endif
 
-#if defined(MMF_CSVT)
-      deallocate(this%t_csvt)
-      deallocate(this%q_csvt)
-      deallocate(this%u_csvt)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+      deallocate(this%t_cvt)
+      deallocate(this%q_cvt)
+      deallocate(this%u_cvt)
 #endif
 
    end subroutine crm_input_finalize 

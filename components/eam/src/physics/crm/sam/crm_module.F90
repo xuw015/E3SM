@@ -247,8 +247,8 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
 #if defined(MMF_ESMT)
   call allocate_scalar_momentum(ncrms)
 #endif
-#if defined(MMF_CSVT)
-  call allocate_CSVT(ncrms)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+  call allocate_CVT(ncrms)
 #endif
 
   crm_rad_temperature => crm_rad%temperature(1:ncrms,:,:,:)
@@ -532,12 +532,10 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     enddo
   enddo
 
-#if defined(MMF_CSVT)
-  call CSVT_diagnose(ncrms)
-#if defined(MMF_CSVT_MOM)
-  call CSVT_diagnose_mom(ncrms)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+  call CVT_diagnose(ncrms)
 #endif
-#endif
+
 
   !$acc parallel loop collapse(2) async(asyncid)
   do k=1,nzm
@@ -568,12 +566,12 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
       vg0  (icrm,k) = vln(icrm,l)
       tg0  (icrm,k) = crm_input%tl(icrm,l)+gamaz(icrm,k)-fac_cond*crm_input%qccl(icrm,l)-fac_sub*crm_input%qiil(icrm,l)
       qg0  (icrm,k) = crm_input%ql(icrm,l)+crm_input%qccl(icrm,l)+crm_input%qiil(icrm,l)
-#if defined(MMF_CSVT)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
       do iwn = 1,crm_nvark
-        t_csvt_amp_tend(icrm,k,iwn) = ( crm_input%t_csvt(icrm,l,iwn) - t_csvt_amp(icrm,k,iwn) )*idt_gl
-        q_csvt_amp_tend(icrm,k,iwn) = ( crm_input%q_csvt(icrm,l,iwn) - q_csvt_amp(icrm,k,iwn) )*idt_gl
-#if defined(MMF_CSVT_MOM)
-        u_csvt_amp_tend(icrm,k,iwn) = ( crm_input%u_csvt(icrm,l,iwn) - u_csvt_amp(icrm,k,iwn) )*idt_gl
+        t_cvt_tend(icrm,k,iwn) = ( crm_input%t_cvt(icrm,l,iwn) - t_cvt(icrm,k,iwn) )*idt_gl
+        q_cvt_tend(icrm,k,iwn) = ( crm_input%q_cvt(icrm,l,iwn) - q_cvt(icrm,k,iwn) )*idt_gl
+#if defined(MMF_SCVT_MOM) || defined(MMF_BCVT_MOM)
+        u_cvt_tend(icrm,k,iwn) = ( crm_input%u_cvt(icrm,l,iwn) - u_cvt(icrm,k,iwn) )*idt_gl
 #endif
       end do
 #endif
@@ -764,13 +762,9 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
 
       !------------------------------------------------------------
       ! variance transport forcing
-#if defined(MMF_CSVT)
-      call CSVT_diagnose(ncrms)
-      call CSVT_forcing(ncrms)
-#if defined(MMF_CSVT_MOM)
-      call CSVT_diagnose_mom(ncrms)
-      call CSVT_forcing_mom(ncrms)
-#endif
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+      call CVT_diagnose(ncrms)
+      call CVT_forcing(ncrms)
 #endif
       !------------------------------------------------------------
       !       Large-scale and surface forcing:
@@ -1256,12 +1250,9 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     enddo
   enddo
 
-#if defined(MMF_CSVT)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
   ! extra diagnose step here for accurate output tendencies
-  call CSVT_diagnose(ncrms)
-#if defined(MMF_CSVT_MOM)
-  call CSVT_diagnose_mom(ncrms)
-#endif
+  call CVT_diagnose(ncrms)
 #endif
 
   !$acc parallel loop collapse(2) async(asyncid)
@@ -1291,7 +1282,7 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
     enddo
   enddo
 
-#if defined(MMF_CSVT)
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
   ! zero out tendencies in top 2 CRM levels and above CRM top
   ! do k = 1 , ptop+1
   do iwn = 1,crm_nvark
@@ -1299,15 +1290,15 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
       do icrm = 1,ncrms
         if ( k>(ptop+1) ) then
           l = plev-k+1
-          crm_output%t_csvt_tend(icrm,k,iwn) = ( t_csvt_amp(icrm,l,iwn) - crm_input%t_csvt(icrm,k,iwn) ) * icrm_run_time
-          crm_output%q_csvt_tend(icrm,k,iwn) = ( q_csvt_amp(icrm,l,iwn) - crm_input%q_csvt(icrm,k,iwn) ) * icrm_run_time
-#if defined(MMF_CSVT_MOM)
-          crm_output%u_csvt_tend(icrm,k,iwn) = ( u_csvt_amp(icrm,l,iwn) - crm_input%u_csvt(icrm,k,iwn) ) * icrm_run_time
+          crm_output%t_cvt_tend(icrm,k,iwn) = ( t_cvt(icrm,l,iwn) - crm_input%t_cvt(icrm,k,iwn) ) * icrm_run_time
+          crm_output%q_cvt_tend(icrm,k,iwn) = ( q_cvt(icrm,l,iwn) - crm_input%q_cvt(icrm,k,iwn) ) * icrm_run_time
+#if defined(MMF_SCVT_MOM) || defined(MMF_BCVT_MOM)
+          crm_output%u_cvt_tend(icrm,k,iwn) = ( u_cvt(icrm,l,iwn) - crm_input%u_cvt(icrm,k,iwn) ) * icrm_run_time
 #endif
         else
-          crm_output%t_csvt_tend(icrm,k,iwn) = 0.
-          crm_output%q_csvt_tend(icrm,k,iwn) = 0.
-          crm_output%u_csvt_tend(icrm,k,iwn) = 0.
+          crm_output%t_cvt_tend(icrm,k,iwn) = 0.
+          crm_output%q_cvt_tend(icrm,k,iwn) = 0.
+          crm_output%u_cvt_tend(icrm,k,iwn) = 0.
         end if
       end do
     end do
@@ -1771,8 +1762,8 @@ subroutine crm(lchnk, ncrms, dt_gl, plev,       &
 #if defined( MMF_ESMT )
   call deallocate_scalar_momentum()
 #endif
-#if defined(MMF_CSVT)
-  call deallocate_CSVT()
+#if defined(MMF_SCVT) || defined(MMF_BCVT)
+  call deallocate_CVT()
 #endif
 
 end subroutine crm

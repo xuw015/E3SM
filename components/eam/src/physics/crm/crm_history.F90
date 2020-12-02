@@ -286,13 +286,19 @@ subroutine crm_history_init(species_class)
 
    call addfld('MMF_SUBCYCLE_FAC', horiz_only,'A',' ', 'CRM subcycle ratio: 1.0 = no subcycling' )
 
-#if defined( MMF_CSVT )
+#if defined(MMF_SCVT)
    do k = 1, crm_nvark
       write(kstr,'(i4)') k
-      call addfld('MMF_T_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM T Variance Wavenumber 1')
-      call addfld('MMF_Q_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM Q Variance Wavenumber 1')
-      call addfld('MMF_U_AMP_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM U Variance Wavenumber 1')
+      call addfld('MMF_CVT_T_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM T Spectral Variance k='//adjustl(trim(kstr)) )
+      call addfld('MMF_CVT_Q_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM Q Spectral Variance k='//adjustl(trim(kstr)) )
+      call addfld('MMF_CVT_U_K'//adjustl(trim(kstr)),(/'lev'/), 'A',' ','CRM U Spectral Variance k='//adjustl(trim(kstr)) )
    end do
+#endif
+
+#if defined(MMF_BCVT)
+   call addfld('MMF_CVT_T',(/'lev'/), 'A',' ','CRM T Bulk Variance')
+   call addfld('MMF_CVT_Q',(/'lev'/), 'A',' ','CRM Q Bulk Variance')
+   call addfld('MMF_CVT_U',(/'lev'/), 'A',' ','CRM U Bulk Variance')
 #endif
 
    !----------------------------------------------------------------------------
@@ -420,7 +426,7 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    integer :: i, k                     ! loop iterators
    logical :: use_ECPP
    character(len=16) :: MMF_microphysics_scheme
-   integer :: idx_csvt_t, idx_csvt_q, idx_csvt_u
+   integer :: idx_cvt_t, idx_cvt_q, idx_cvt_u
    character(len=4) :: kstr
 
    !----------------------------------------------------------------------------
@@ -645,17 +651,27 @@ subroutine crm_history_out(state, ptend, crm_state, crm_rad, crm_output, crm_ecp
    call outfld('MMF_DV',ptend%v, pcols, lchnk )
 #endif /* MMF_MOMENTUM_FEEDBACK */
 
-#if defined( MMF_CSVT )
+#if defined( MMF_SCVT )
    do k = 1, crm_nvark
       write(kstr,'(i4)') k
-      call cnst_get_ind( 'CRM_T_AMP_K'//adjustl(trim(kstr)), idx_csvt_t )
-      call cnst_get_ind( 'CRM_Q_AMP_K'//adjustl(trim(kstr)), idx_csvt_q )
-      call cnst_get_ind( 'CRM_U_AMP_K'//adjustl(trim(kstr)), idx_csvt_u )
-      call outfld('MMF_T_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_t), pcols, lchnk )
-      call outfld('MMF_Q_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_q), pcols, lchnk )
-      call outfld('MMF_U_AMP_K'//adjustl(trim(kstr)), state%q(:,:,idx_csvt_u), pcols, lchnk )
+      call cnst_get_ind( 'CVT_T_K'//adjustl(trim(kstr)), idx_cvt_t )
+      call cnst_get_ind( 'CVT_Q_K'//adjustl(trim(kstr)), idx_cvt_q )
+      call cnst_get_ind( 'CVT_U_K'//adjustl(trim(kstr)), idx_cvt_u )
+      call outfld('MMF_CVT_T_K'//adjustl(trim(kstr)), state%q(:,:,idx_cvt_t), pcols, lchnk )
+      call outfld('MMF_CVT_Q_K'//adjustl(trim(kstr)), state%q(:,:,idx_cvt_q), pcols, lchnk )
+      call outfld('MMF_CVT_U_K'//adjustl(trim(kstr)), state%q(:,:,idx_cvt_u), pcols, lchnk )
    end do
 #endif
+
+#if defined( MMF_BCVT )
+   call cnst_get_ind( 'CVT_T', idx_cvt_t )
+   call cnst_get_ind( 'CVT_Q', idx_cvt_q )
+   call cnst_get_ind( 'CVT_U', idx_cvt_u )
+   call outfld('MMF_CVT_T', state%q(:,:,idx_cvt_t), pcols, lchnk )
+   call outfld('MMF_CVT_Q', state%q(:,:,idx_cvt_q), pcols, lchnk )
+   call outfld('MMF_CVT_U', state%q(:,:,idx_cvt_u), pcols, lchnk )
+#endif
+
 
 end subroutine crm_history_out
 !---------------------------------------------------------------------------------------------------
