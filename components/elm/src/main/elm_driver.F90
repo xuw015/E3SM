@@ -62,6 +62,7 @@ module elm_driver
   use AnnualUpdateMod      , only : AnnualUpdate
   use EcosystemBalanceCheckMod      , only : BeginColCBalance, BeginColNBalance, ColCBalanceCheck, ColNBalanceCheck
   use EcosystemBalanceCheckMod      , only : BeginColPBalance, ColPBalanceCheck
+  use EcosystemBalanceCheckMod      , only : BeginGridCBalance, GridCBalanceCheck
   use EcosystemBalanceCheckMod      , only : BeginGridCBalanceBeforeDynSubgridDriver
   use EcosystemBalanceCheckMod      , only : BeginGridNBalanceBeforeDynSubgridDriver
   use EcosystemBalanceCheckMod      , only : BeginGridPBalanceBeforeDynSubgridDriver
@@ -331,6 +332,8 @@ contains
        
        if (use_cn) then
           call t_startf('cnpinit')
+
+          call BeginGridCBalance(bounds_clump, col_cs, grc_cs)
 
           call veg_cs%ZeroDwt(bounds_clump)
 
@@ -1283,6 +1286,8 @@ contains
                 call ColPBalanceCheck(bounds_clump, &
                      filter(nc)%num_soilc, filter(nc)%soilc, &
                      phosphorusstate_vars, phosphorusflux_vars)
+
+                call GridCBalanceCheck(bounds_clump, col_cs, col_cf, grc_cs, grc_cf)
 
                 call t_stopf('cnbalchk')
              end if
