@@ -318,6 +318,72 @@ end subroutine CVT_forcing
 
 #if defined(MMF_BCVT)
 
+#if defined(MMF_BCVT_FILT)
+subroutine CVT_filter(ncrms,f_in,f_out)
+   !----------------------------------------------------------------------------
+   ! Purpose: use FFT to filter out high frequency modes
+   !----------------------------------------------------------------------------
+   use crmdims,   only: crm_dx
+   use fftpack51D
+   implicit none
+
+   ! interface arguments
+   integer, intent(in) :: ncrms
+   real(crm_rknd), dimension(ncrms,nx,ny,nzm), intent(in ) :: f_in
+   real(crm_rknd), dimension(ncrms,nx,ny,nzm), intent(out) :: f_out
+
+   ! local variables
+   integer, parameter :: lensav = nx+15 ! must be at least N + INT(LOG(REAL(N))) + 4.
+   real(crm_rknd), dimension(nx)    :: fft_out   ! for FFT input and output
+   real(crm_rknd), dimension(nx)    :: work      ! work array
+   real(crm_rknd), dimension(lensav):: wsave     ! prime factors of N and certain trig values used in rfft1f
+   ! real(crm_rknd), dimension(nx)    :: wave_num    ! only for debugging
+   integer :: i, j, k, icrm   ! loop iterators
+   integer :: ier             ! FFT error return code
+   integer, parameter :: filter_wn_max = MMF_FCVT_KMAX
+   !----------------------------------------------------------------------------
+   ! initialization for FFT
+   call rfft1i(nx,wsave,lensav,ier)
+   if(ier /= 0) write(0,*) 'ERROR: rfftmi(): CVT_filter - FFT initialization error ',ier
+   
+   !$acc parallel loop collapse(3) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do icrm = 1,ncrms
+            
+            ! initialize FFT input
+            do i = 1,nx
+               fft_out(i) = f_in(icrm,i,j,k)
+            end do
+
+            ! do the forward transform
+            call rfft1f( nx, 1, fft_out(:), nx, wsave, lensav, work(:), nx, ier )
+            if (ier/=0) write(0,*) 'ERROR: rfftmf(): CVT_filter - forward FFT error ',ier
+
+            ! filter out high frequencies
+            ! do i = 5, nx
+            !    fft_out(2*i)   = 0
+            !    fft_out(2*i+1) = 0
+            ! end do
+            
+            fft_out(2*(filter_wn_max+1):) = 0
+
+            ! transform back
+            call rfft1b( nx, 1, fft_out(:), nx, wsave, lensav, work(:), nx, ier )
+            if(ier /= 0) write(0,*) 'ERROR: rfftmb(): CVT_filter - backward FFT error ',ier
+
+            ! copy to output
+            do i = 1,nx
+               f_out(icrm,i,j,k) = fft_out(i)
+            end do
+
+         end do
+      end do
+   end do
+
+end subroutine CVT_filter
+#endif /* MMF_BCVT_FILT */
+
 subroutine CVT_diagnose(ncrms)
    !----------------------------------------------------------------------------
    ! Purpose: Diagnose amplitude for each wavenumber for variance transport
@@ -333,6 +399,8 @@ subroutine CVT_diagnose(ncrms)
    ! local variables
    real(crm_rknd), allocatable :: t_mean(:,:)
    real(crm_rknd), allocatable :: q_mean(:,:)
+   real(crm_rknd), allocatable :: tmp_t(:,:,:,:)
+   real(crm_rknd), allocatable :: tmp_q(:,:,:,:)
    real(crm_rknd) :: tmp
    real(crm_rknd) :: factor_xy
    integer :: i, j, k, icrm   ! loop iterators
@@ -340,6 +408,9 @@ subroutine CVT_diagnose(ncrms)
 
    allocate( t_mean( ncrms, nzm ) )
    allocate( q_mean( ncrms, nzm ) )
+
+   allocate( tmp_t( ncrms, nx, ny, nzm ) )
+   allocate( tmp_q( ncrms, nx, ny, nzm ) )
 
    factor_xy = 1._crm_rknd/dble(nx*ny)
 
@@ -382,6 +453,40 @@ subroutine CVT_diagnose(ncrms)
    !----------------------------------------------------------------------------
    ! calculate anomalies
    !----------------------------------------------------------------------------
+#if defined(MMF_BCVT_FILT)
+   
+   !$acc parallel loop collapse(4) async(asyncid)
+   do k = 1,nzm
+      do j = 1,ny
+         do i = 1,nx
+            do icrm = 1,ncrms
+               tmp_t(icrm,i,j,k) = t(icrm,i,j,k) 
+               tmp_q(icrm,i,j,k) = qv(icrm,i,j,k) + qcl(icrm,i,j,k) + qci(icrm,i,j,k)
+               tmp_t(icrm,i,j,k) = tmp_t(icrm,i,j,k) - t_mean(icrm,k)
+               tmp_q(icrm,i,j,k) = tmp_q(icrm,i,j,k) - q_mean(icrm,k)
+            end do
+         end do
+      end do
+   end do
+
+   call CVT_filter( ncrms, tmp_t, t_cvt_pert )
+   call CVT_filter( ncrms, tmp_q, q_cvt_pert )
+
+   ! !$acc parallel loop collapse(4) async(asyncid)
+   ! do k = 1,nzm
+   !    do j = 1,ny
+   !       do i = 1,nx
+   !          do icrm = 1,ncrms
+   !             t_cvt_pert(icrm,i,j,k) = t(icrm,i,j,k) - t_mean(icrm,k)
+   !             tmp = qv(icrm,i,j,k) + qcl(icrm,i,j,k) + qci(icrm,i,j,k)
+   !             q_cvt_pert(icrm,i,j,k) = tmp           - q_mean(icrm,k)
+   !          end do
+   !       end do
+   !    end do
+   ! end do
+
+#else
+
    !$acc parallel loop collapse(4) async(asyncid)
    do k = 1,nzm
       do j = 1,ny
@@ -394,6 +499,8 @@ subroutine CVT_diagnose(ncrms)
          end do
       end do
    end do
+
+#endif
 
    !----------------------------------------------------------------------------
    ! calculate variance
@@ -424,6 +531,9 @@ subroutine CVT_diagnose(ncrms)
    deallocate( t_mean )
    deallocate( q_mean )
 
+   deallocate( tmp_t )
+   deallocate( tmp_q )
+
    !----------------------------------------------------------------------------
    ! call momentum variance diagnostic routine
    !----------------------------------------------------------------------------
@@ -449,8 +559,8 @@ subroutine CVT_forcing(ncrms)
    integer, intent(in) :: ncrms
 
    ! local variables
-   real(crm_rknd), parameter :: pert_scale_min = 0.9
-   real(crm_rknd), parameter :: pert_scale_max = 1.1
+   real(crm_rknd), parameter   :: pert_scale_min = 1.0 - 0.1
+   real(crm_rknd), parameter   :: pert_scale_max = 1.0 + 0.1
    real(crm_rknd), allocatable :: t_pert_scale(:,:)
    real(crm_rknd), allocatable :: q_pert_scale(:,:)
    real(crm_rknd), allocatable :: ttend_loc(:,:,:,:)
