@@ -170,10 +170,9 @@ module elm_driver
   use WaterBudgetMod              , only : WaterBudget_SetBeginningMonthlyStates
   use WaterBudgetMod              , only : WaterBudget_SetEndingMonthlyStates
   use CNPBudgetMod                , only : CNPBudget_Run, CNPBudget_Accum, CNPBudget_Print, CNPBudget_Reset
-  use CNPBudgetMod                , only : CNPBudget_SetEndingMonthlyStates
+  use CNPBudgetMod                , only : CNPBudget_SetBeginningMonthlyStates, CNPBudget_SetEndingMonthlyStates
   use elm_varctl                  , only : do_budgets, budget_inst, budget_daily, budget_month
   use elm_varctl                  , only : budget_ann, budget_ltann, budget_ltend
-
   !
   ! !PUBLIC TYPES:
   implicit none
@@ -531,6 +530,9 @@ contains
 
        if (do_budgets) then
           call WaterBudget_SetBeginningMonthlyStates(bounds_clump, waterstate_vars)
+          if (use_cn) then
+             call CNPBudget_SetBeginningMonthlyStates(bounds_clump, col_cs, grc_cs)
+          endif
        endif
 
     end do
@@ -1270,38 +1272,34 @@ contains
             soilhydrology_vars)
        call t_stopf('gridbalchk')
 
-       call WaterBudget_SetEndingMonthlyStates(bounds_clump, waterstate_vars)
-       if (use_cn) then
-          call CNPBudget_SetEndingMonthlyStates(bounds_clump, col_cs, grc_cs)
+       if (do_budgets) then
+          call WaterBudget_SetEndingMonthlyStates(bounds_clump, waterstate_vars)
+          if (use_cn) then
+             call CNPBudget_SetEndingMonthlyStates(bounds_clump, col_cs, grc_cs)
+          endif
        endif
 
        if (.not. use_fates)then
           if (use_cn) then
              nstep = get_nstep()
 
-             if (nstep < 2 )then
-                if (masterproc) then
-                   write(iulog,*) '--WARNING-- skipping CN balance check for first timestep'
-                end if
-             else
-                call t_startf('cnbalchk')
+             call t_startf('cnbalchk')
 
-                call ColCBalanceCheck(bounds_clump, &
-                     filter(nc)%num_soilc, filter(nc)%soilc, &
-                     col_cs, carbonflux_vars)
+             call ColCBalanceCheck(bounds_clump, &
+                  filter(nc)%num_soilc, filter(nc)%soilc, &
+                  col_cs, carbonflux_vars)
 
-                call ColNBalanceCheck(bounds_clump, &
-                     filter(nc)%num_soilc, filter(nc)%soilc, &
-                     nitrogenstate_vars, nitrogenflux_vars)
+             call ColNBalanceCheck(bounds_clump, &
+                  filter(nc)%num_soilc, filter(nc)%soilc, &
+                  nitrogenstate_vars, nitrogenflux_vars)
 
-                call ColPBalanceCheck(bounds_clump, &
-                     filter(nc)%num_soilc, filter(nc)%soilc, &
-                     phosphorusstate_vars, phosphorusflux_vars)
+             call ColPBalanceCheck(bounds_clump, &
+                  filter(nc)%num_soilc, filter(nc)%soilc, &
+                  phosphorusstate_vars, phosphorusflux_vars)
 
-                call GridCBalanceCheck(bounds_clump, col_cs, col_cf, grc_cs, grc_cf)
+             call GridCBalanceCheck(bounds_clump, col_cs, col_cf, grc_cs, grc_cf)
 
-                call t_stopf('cnbalchk')
-             end if
+             call t_stopf('cnbalchk')
           end if
        end if
 
@@ -1439,7 +1437,7 @@ contains
        call WaterBudget_Print(budget_inst,  budget_daily,  budget_month,  &
             budget_ann,  budget_ltann,  budget_ltend)
 
-       if (use_cn .and. nstep > 1 .and. do_budgets) then
+       if (use_cn .and. do_budgets) then
           call CNPBudget_Run(bounds_proc, atm2lnd_vars, lnd2atm_vars, grc_cs, grc_cf)
           call CNPBudget_Accum()
           call CNPBudget_Print(budget_inst,  budget_daily,  budget_month,  &
