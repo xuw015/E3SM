@@ -5,7 +5,7 @@ module CNPBudgetMod
   use shr_sys_mod         , only : shr_sys_abort
   use decompMod           , only : bounds_type
   use abortutils          , only : endrun
-  use clm_varctl          , only : iulog
+  use elm_varctl          , only : iulog
   use atm2lndType         , only : atm2lnd_type
   use lnd2atmType         , only : lnd2atm_type
   use spmdMod             , only : masterproc
@@ -565,7 +565,7 @@ contains
     ! !DESCRIPTION:
     !
     use domainMod, only : ldomain
-    use clm_varcon, only : re
+    use elm_varcon, only : re
     !
     implicit none
 
@@ -585,7 +585,7 @@ contains
     ! !DESCRIPTION:
     !
     use domainMod, only : ldomain
-    use clm_varcon, only : re
+    use elm_varcon, only : re
     !
     implicit none
 
@@ -1086,8 +1086,8 @@ contains
     !
     ! !USES:
     use subgridAveMod    , only : p2c, c2g
-    use clm_varpar       , only : nlevgrnd, nlevsoi, nlevurb
-    use clm_varcon       , only : spval
+    use elm_varpar       , only : nlevgrnd, nlevsoi, nlevurb
+    use elm_varcon       , only : spval
     use column_varcon    , only : icol_roof, icol_sunwall, icol_shadewall
     use column_varcon    , only : icol_road_perv, icol_road_imperv
     use clm_time_manager , only : get_curr_date, get_prev_date, get_nstep
@@ -1146,8 +1146,8 @@ contains
     !
     ! !USES:
     use subgridAveMod    , only : p2c, c2g
-    use clm_varpar       , only : nlevgrnd, nlevsoi, nlevurb
-    use clm_varcon       , only : spval
+    use elm_varpar       , only : nlevgrnd, nlevsoi, nlevurb
+    use elm_varcon       , only : spval
     use column_varcon    , only : icol_roof, icol_sunwall, icol_shadewall
     use column_varcon    , only : icol_road_perv, icol_road_imperv
     use clm_time_manager , only : get_curr_date, get_prev_date, get_nstep
