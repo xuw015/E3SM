@@ -305,6 +305,7 @@ contains
                                  cnallocate_carbonphosphorus_only
     use pftvarcon        , only: npcropmin, declfact, bfact, aleaff, arootf, astemf, noveg
     use pftvarcon        , only: arooti, fleafi, allconsl, allconss, grperc, grpnow, nsoybean
+    use pftvarcon        , only: percrop
     use clm_varpar       , only: nlevdecomp
     use clm_varcon       , only: nitrif_n2o_loss_frac, secspday
     use clm_varctl       , only: cnallocate_carbon_only_set
@@ -823,7 +824,7 @@ contains
 
          if (ivt(p) >= npcropmin) then ! skip 2 generic crops
 
-            if (croplive(p)) then
+            if (croplive(p) .and. percrop(ivt(p)) == 0.0_r8 ) then
                ! same phases appear in subroutine CropPhenology
 
                ! Phase 1 completed:
@@ -930,6 +931,19 @@ contains
                   aroot(p) = 0._r8    ! this applies to this "else" and to the "else"
                   arepr(p) = 0._r8    ! a few lines down
                end if
+
+               f1 = aroot(p) / aleaf(p)
+               f3 = astem(p) / aleaf(p)
+               f5 = arepr(p) / aleaf(p)
+               g1 = 0.25_r8
+
+            else if (croplive(p) .and. percrop(ivt(p)) == 1.0_r8) then
+               arepr(p) = 0._r8
+               aleaf(p) = 1.e-5_r8
+               aroot(p) = max(0._r8, min(1._r8, arooti(ivt(p)) -   &
+                    (arooti(ivt(p)) - arootf(ivt(p))) *  &
+                    min(1._r8, hui(p)/gddmaturity(p))))
+               astem(p) = 1._r8 - arepr(p) - aleaf(p) - aroot(p)
 
                f1 = aroot(p) / aleaf(p)
                f3 = astem(p) / aleaf(p)
