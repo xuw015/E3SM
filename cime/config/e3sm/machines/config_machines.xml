@@ -2067,12 +2067,12 @@
         <command name="purge"/>
       </modules>
       <modules compiler="pgi">
-        <command name="unload">gcc</command>
-        <command name="load">pgi</command>
+        <command name="unload">gnu</command>
+        <command name="load">nvhpc</command>
       </modules>
       <modules compiler="gnu">
-        <command name="unload">pgi</command>
-        <command name="load">gcc</command>
+        <command name="unload">nvhpc</command>
+        <command name="load">gnu</command>
       </modules>
     </module_system>
 -->
