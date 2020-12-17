@@ -497,6 +497,7 @@ contains
     else
       ngcols = hdim1_d*hdim2_d
     endif
+    
     allocate( clat_d(1:ngcols) )
     allocate( clon_d(1:ngcols) )
     allocate( lat_d(1:ngcols) )
@@ -504,16 +505,22 @@ contains
     allocate( cdex(1:ngcols) )
     clat_d = 100000.0_r8
     clon_d = 100000.0_r8
-    if (single_column .and. dycore_is('SE')) then
-      lat_d = scmlat
-      lon_d = scmlon
-      clat_d = scmlat * deg2rad
-      clon_d = scmlon * deg2rad
-    else
-      call get_horiz_grid_d(ngcols, clat_d_out=clat_d, clon_d_out=clon_d, lat_d_out=lat_d, lon_d_out=lon_d)
-    endif
+!    if (single_column .and. dycore_is('SE')) then
+!      lat_d = scmlat
+!      lon_d = scmlon
+!      clat_d = scmlat * deg2rad
+!      clon_d = scmlon * deg2rad
+      lat_d(1:ngcols) = 31.5
+      lon_d(1:ngcols) = 239.0
+      clat_d(1:ngcols) = 31.5 * deg2rad
+      clon_d(1:ngcols) = 239.0 * deg2rad      
+!    else
+!      call get_horiz_grid_d(ngcols, clat_d_out=clat_d, clon_d_out=clon_d, lat_d_out=lat_d, lon_d_out=lon_d)
+!    endif
     latmin = MINVAL(ABS(lat_d))
     lonmin = MINVAL(ABS(lon_d))
+    
+    write(*,*) 'LATShere ', lat_d
 
     ! Get estimated computational cost weight for each column (only from SE dynamics currently)
     allocate( cost_d (1:ngcols) )
@@ -1037,12 +1044,13 @@ contains
     area_d = 0.0_r8
     wght_d = 0.0_r8
 
-    if (single_column .and. dycore_is('SE')) then
-      area_d = 4.0_r8*pi
-      wght_d = 4.0_r8*pi
-    else
-      call get_horiz_grid_d(ngcols, area_d_out=area_d, wght_d_out=wght_d)
-    endif
+    ! DPAB in future put iop_mode conditional here
+!    if (single_column .and. dycore_is('SE')) then
+      area_d(1:ngcols) = 4.0_r8*pi/ngcols
+      wght_d(1:ngcols) = 4.0_r8*pi/ngcols
+!    else
+!      call get_horiz_grid_d(ngcols, area_d_out=area_d, wght_d_out=wght_d)
+!    endif
 
     if ( abs(sum(area_d) - 4.0_r8*pi) > 1.e-10_r8 ) then
        write(iulog,*) ' ERROR: sum of areas on globe does not equal 4*pi'
@@ -1058,6 +1066,8 @@ contains
 
     do lcid=begchunk,endchunk
        do i=1,lchunks(lcid)%ncols
+!          lchunks(lcid)%area(i) = area_d
+!          lchunks(lcid)%wght(i) = wght_d
           lchunks(lcid)%area(i) = area_d(lchunks(lcid)%gcol(i))
           lchunks(lcid)%wght(i) = wght_d(lchunks(lcid)%gcol(i))
        enddo

@@ -96,6 +96,8 @@ module dyn_grid
 
   real(r8), public, pointer :: w(:) => null()       ! weights
 
+  real(r8), parameter :: deg2rad = SHR_CONST_PI/180.0
+
   ! Local lat/lon arrays
   real(r8),      allocatable :: pelat_deg(:)        ! pe-local latitudes (degrees)
   real(r8),      allocatable :: pelon_deg(:)        ! pe-local longitudes (degrees)
@@ -581,10 +583,10 @@ contains
       call compute_global_coords(lat_d_rad_temp, lon_d_rad_temp, &
                                  lat_d_deg_temp, lon_d_deg_temp)
 
-      if (present(clat_d_out)) clat_d_out = lat_d_rad_temp
-      if (present(clon_d_out)) clon_d_out = lon_d_rad_temp
-      if (present(lat_d_out))   lat_d_out = lat_d_deg_temp
-      if (present(lon_d_out))   lon_d_out = lon_d_deg_temp
+      if (present(clat_d_out)) clat_d_out = 31.5 * deg2rad
+      if (present(clon_d_out)) clon_d_out = 239.0 * deg2rad
+      if (present(lat_d_out))   lat_d_out = 31.5
+      if (present(lon_d_out))   lon_d_out = 239.0
 
       deallocate( lat_d_rad_temp )
       deallocate( lon_d_rad_temp )
