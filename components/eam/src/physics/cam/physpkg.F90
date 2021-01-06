@@ -23,7 +23,7 @@ module physpkg
   use physics_update_mod,  only: physics_update, physics_update_init, hist_vars, nvars_prtrb_hist, get_var
   use phys_grid,        only: get_ncols_p, print_cost_p, update_cost_p, phys_proc_cost
   use phys_gmean,       only: gmean_mass
-  use ppgrid,           only: begchunk, endchunk, pcols, pver, pverp, psubcols
+  use ppgrid,           only: begchunk, endchunk, pcols, pver, pverp, psubcols, nbrhdchunk
   use constituents,     only: pcnst, cnst_name, cnst_get_ind
   use camsrfexch,       only: cam_out_t, cam_in_t
 
@@ -739,11 +739,15 @@ subroutine phys_init( phys_state, phys_tend, pbuf2d, cam_out )
 
     !-----------------------------------------------------------------------
 
-    call physics_type_alloc(phys_state, phys_tend, begchunk, endchunk, pcols)
+    call physics_type_alloc(phys_state, phys_tend, begchunk, endchunk, nbrhdchunk, pcols)
 
     do lchnk = begchunk, endchunk
        call physics_state_set_grid(lchnk, phys_state(lchnk))
     end do
+    if (nbrhdchunk > 0) then
+       lchnk = endchunk+nbrhdchunk
+       call physics_state_set_grid(lchnk, phys_state(lchnk), nonstandard_pcols_in=.true.)
+    end if
 
     !-------------------------------------------------------------------------------------------
     ! Initialize any variables in physconst which are not temporally and/or spatially constant
@@ -946,7 +950,7 @@ subroutine phys_run1(phys_state, ztodt, phys_tend, pbuf2d,  cam_in, cam_out)
     !
     ! Input/Output arguments
     !
-    type(physics_state), intent(inout), dimension(begchunk:endchunk) :: phys_state
+    type(physics_state), intent(inout), dimension(begchunk:endchunk+nbrhdchunk) :: phys_state
     type(physics_tend ), intent(inout), dimension(begchunk:endchunk) :: phys_tend
 
     type(physics_buffer_desc), pointer, dimension(:,:) :: pbuf2d
@@ -956,7 +960,7 @@ subroutine phys_run1(phys_state, ztodt, phys_tend, pbuf2d,  cam_in, cam_out)
     !
     !---------------------------Local workspace-----------------------------
     !
-    integer :: c                                 ! indices
+    integer :: c, c_nbrhd                        ! indices
     integer :: ncol                              ! number of columns
     integer :: nstep                             ! current timestep number
 #if (! defined SPMD)
@@ -1027,6 +1031,7 @@ subroutine phys_run1(phys_state, ztodt, phys_tend, pbuf2d,  cam_in, cam_out)
 
        call system_clock(count=beg_proc_cnt)
        
+       c_nbrhd = endchunk+nbrhdchunk
 !$OMP PARALLEL DO SCHEDULE(STATIC,1) &
 !$OMP PRIVATE (c, beg_chnk_cnt, phys_buffer_chunk, end_chnk_cnt, sysclock_rate, sysclock_max, chunk_cost)
        do c=begchunk, endchunk
@@ -1044,7 +1049,7 @@ subroutine phys_run1(phys_state, ztodt, phys_tend, pbuf2d,  cam_in, cam_out)
 
           call tphysbc (ztodt, fsns(1,c), fsnt(1,c), flns(1,c), flnt(1,c), phys_state(c),        &
                        phys_tend(c), phys_buffer_chunk,  fsds(1,c), landm(1,c),          &
-                       sgh(1,c), sgh30(1,c), cam_out(c), cam_in(c) )
+                       sgh(1,c), sgh30(1,c), cam_out(c), cam_in(c), phys_state(c_nbrhd) )
 
           call system_clock(count=end_chnk_cnt, count_rate=sysclock_rate, count_max=sysclock_max)
           if ( end_chnk_cnt < beg_chnk_cnt ) end_chnk_cnt = end_chnk_cnt + sysclock_max
@@ -1205,7 +1210,7 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
     !
     ! Input/Output arguments
     !
-    type(physics_state), intent(inout), dimension(begchunk:endchunk) :: phys_state
+    type(physics_state), intent(inout), dimension(begchunk:endchunk+nbrhdchunk) :: phys_state
     type(physics_tend ), intent(inout), dimension(begchunk:endchunk) :: phys_tend
     type(physics_buffer_desc),pointer, dimension(:,:)     :: pbuf2d
 
@@ -1215,7 +1220,7 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
     !-----------------------------------------------------------------------
     !---------------------------Local workspace-----------------------------
     !
-    integer :: c                                 ! chunk index
+    integer :: c, c_nbrhd                        ! chunk index
     integer :: ncol                              ! number of columns
     integer :: nstep                             ! current timestep number
 #if (! defined SPMD)
@@ -1267,6 +1272,7 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
 
     call system_clock(count=beg_proc_cnt)
 
+    c_nbrhd = endchunk+nbrhdchunk
 !$OMP PARALLEL DO SCHEDULE(STATIC,1) &
 !$OMP PRIVATE (c, beg_chnk_cnt, ncol, phys_buffer_chunk, end_chnk_cnt, sysclock_rate, sysclock_max, chunk_cost)
     do c=begchunk,endchunk
@@ -1294,7 +1300,7 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
        call tphysac(ztodt, cam_in(c),  &
             sgh(1,c), sgh30(1,c), cam_out(c),                              &
             phys_state(c), phys_tend(c), phys_buffer_chunk,&
-            fsds(1,c))
+            fsds(1,c), phys_state(c_nbrhd))
 
        call system_clock(count=end_chnk_cnt, count_rate=sysclock_rate, count_max=sysclock_max)
        if ( end_chnk_cnt < beg_chnk_cnt ) end_chnk_cnt = end_chnk_cnt + sysclock_max
@@ -1367,7 +1373,7 @@ end subroutine phys_final
 subroutine tphysac (ztodt,   cam_in,  &
        sgh,     sgh30,                                     &
        cam_out,  state,   tend,    pbuf,            &
-       fsds    )
+       fsds, state_nbrhd    )
     !----------------------------------------------------------------------- 
     ! 
     ! Purpose: 
@@ -1435,6 +1441,7 @@ subroutine tphysac (ztodt,   cam_in,  &
     type(physics_state), intent(inout) :: state
     type(physics_tend ), intent(inout) :: tend
     type(physics_buffer_desc), pointer :: pbuf(:)
+    type(physics_state), intent(in)    :: state_nbrhd   ! for column neighborhoods
 
     !
     !---------------------------Local workspace-----------------------------
@@ -1838,7 +1845,7 @@ end subroutine tphysac
 subroutine tphysbc (ztodt,               &
        fsns,    fsnt,    flns,    flnt,    state,   &
        tend,    pbuf,     fsds,    landm,            &
-       sgh, sgh30, cam_out, cam_in )
+       sgh, sgh30, cam_out, cam_in, state_nbrhd )
     !----------------------------------------------------------------------- 
     ! 
     ! Purpose: 
@@ -1926,7 +1933,7 @@ subroutine tphysbc (ztodt,               &
 
     type(cam_out_t),     intent(inout) :: cam_out
     type(cam_in_t),      intent(in)    :: cam_in
-
+    type(physics_state), intent(in)    :: state_nbrhd   ! for column neighborhoods
 
     !
     !---------------------------Local workspace-----------------------------
@@ -2338,7 +2345,8 @@ end if
          rliq,    &
          ztodt,   &
          state,   ptend, cam_in%landfrac, pbuf, mu, eu, du, md, ed, dp,   &
-         dsubcld, jt, maxg, ideep, lengath) 
+         !dsubcld, jt, maxg, ideep, lengath) 
+         dsubcld, jt, maxg, ideep, lengath, state_nbrhd) ! wx: pss state_nbrhd here for improved ZM scheme, 2020-12-31
     call t_stopf('convect_deep_tend')
 
     call physics_update(state, ptend, ztodt, tend)

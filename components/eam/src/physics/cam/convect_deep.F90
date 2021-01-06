@@ -164,7 +164,8 @@ subroutine convect_deep_tend( &
      rliq    , &
      ztodt   , &
      state   ,ptend   ,landfrac ,pbuf, mu, eu, &
-     du, md, ed, dp, dsubcld, jt, maxg, ideep,lengath ) 
+     !du, md, ed, dp, dsubcld, jt, maxg, ideep,lengath ) 
+     du, md, ed, dp, dsubcld, jt, maxg, ideep,lengath, state_nbrhd) ! wx: get state_nbrhd for improved ZM scheme, 2020-12-31
 
 
 
@@ -178,6 +179,9 @@ subroutine convect_deep_tend( &
    use physics_buffer, only: physics_buffer_desc, pbuf_get_field
 
 ! Arguments
+   
+   type(physics_state), intent(in)    :: state_nbrhd   ! wx: for column neighborhoods, 2020-12-31
+
    type(physics_state), intent(in ) :: state   ! Physics state variables
    type(physics_ptend), intent(out) :: ptend   ! individual parameterization tendencies
    
@@ -287,7 +291,8 @@ subroutine convect_deep_tend( &
           ztodt   , &
           jctop, jcbot , &
           state   ,ptend   ,landfrac, pbuf, mu, eu, &
-          du, md, ed, dp, dsubcld, jt, maxg, ideep, lengath)
+          !du, md, ed, dp, dsubcld, jt, maxg, ideep, lengath)
+          du, md, ed, dp, dsubcld, jt, maxg, ideep, lengath,state_nbrhd) ! wx: pass state_nbrhd for improved ZM scheme, 2020-12-31
      call t_stopf('zm_conv_tend')
 
 

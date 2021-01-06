@@ -259,7 +259,8 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
      ztodt   , &
      jctop   ,jcbot , &
      state   ,ptend_all   ,landfrac,  pbuf, mu, eu, &
-     du, md, ed, dp, dsubcld, jt, maxg, ideep, lengath) 
+     !du, md, ed, dp, dsubcld, jt, maxg, ideep, lengath) 
+     du, md, ed, dp, dsubcld, jt, maxg, ideep, lengath, state_nbrhd) ! wx: get state_nbrhd here for improved ZM scheme, 2020-12-31 
 
    use cam_history,   only: outfld
    use physics_types, only: physics_state, physics_ptend
@@ -275,8 +276,11 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
    use constituents,  only: pcnst, cnst_get_ind, cnst_is_convtran1
    use physconst,     only: gravit
    use phys_control,  only: cam_physpkg_is
-
+   ! wx: 06/12/2020
+   use phys_grid_nbrhd, only: nbrhd_get_nbrhd_size
    ! Arguments
+   
+   type(physics_state), intent(in)    :: state_nbrhd   ! wx: for column neighborhoods, 2020-12-3
 
    type(physics_state), intent(in )   :: state          ! Physics state variables
    type(physics_ptend), intent(out)   :: ptend_all      ! individual parameterization tendencies
@@ -388,6 +392,9 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
 
    logical  :: lq(pcnst)
 
+   ! wx: 06/12/2020
+   integer :: n_hd(pcols)
+
    !----------------------------------------------------------------------
 
    ! initialize
@@ -449,7 +456,13 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
 !
 ! Begin with Zhang-McFarlane (1996) convection parameterization
 !
+   ! wx: 06/12/2020 Get size for the neighborhood
+   do i = 1,ncol
+      n_hd(i) = nbrhd_get_nbrhd_size(lchnk,i)
+   end do
+   !
    call t_startf ('zm_convr')
+   !   
    call zm_convr(   lchnk   ,ncol    , &
                     state%t       ,state%q(:,:,1)     ,prec    ,jctop   ,jcbot   , &
                     pblh    ,state%zm      ,state%phis    ,state%zi      ,ptend_loc%q(:,:,1)    , &
@@ -459,7 +472,7 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
                     mu,md,du,eu,ed      , &
                     dp ,dsubcld ,jt,maxg,ideep   , &
                     lengath ,ql      ,rliq  ,landfrac, hu_nm1, cnv_nm1, tm1, qm1, &
-                    t_star, q_star, dcape)  
+                    t_star, q_star, dcape, n_hd, state_nbrhd)  
    call t_stopf ('zm_convr')
 
    call outfld('CAPE', cape, pcols, lchnk)        ! RBN - CAPE output

@@ -254,7 +254,9 @@ subroutine zm_convr(lchnk   ,ncol    , &
                     mu      ,md      ,du      ,eu      ,ed      , &
                     dp      ,dsubcld ,jt      ,maxg    ,ideep   , &
                     lengath ,ql      ,rliq    ,landfrac,hu_nm1  , &
-                    cnv_nm1 ,tm1     ,qm1     ,t_star  ,q_star, dcape)
+                    !cnv_nm1 ,tm1     ,qm1     ,t_star  ,q_star, dcape)
+                    ! wx: 06/12/2020
+                    cnv_nm1 ,tm1     ,qm1     ,t_star  ,q_star, dcape, n_hd, state_nbrhd)
 !----------------------------------------------------------------------- 
 ! 
 ! Purpose: 
@@ -275,6 +277,9 @@ subroutine zm_convr(lchnk   ,ncol    , &
 !-----------------------------------------------------------------------
    use phys_control, only: cam_physpkg_is
    use time_manager, only: is_first_step, is_first_restart_step   !songxl 2014-05-20
+   ! wx: 06/12/2020
+   use physics_types,   only: physics_state
+   use phys_grid_nbrhd, only: nbrhd_get_nbrhd 
 !
 ! ************************ index of variables **********************
 !
@@ -544,13 +549,81 @@ subroutine zm_convr(lchnk   ,ncol    , &
 
    real(r8) qdifr
    real(r8) sdifr
+! wx: 06/12/2020 For improved ZM scheme
+   integer, intent(in) :: n_hd(pcols)
+   type(physics_state), intent(in)    :: state_nbrhd   ! wx: for column neighborhoods, 2020-12-3
+   
+   real(r8) :: t_nbd(pcols,100,pver)
+   real(r8) :: qh_nbd(pcols,100,pver)
+   real(r8) :: zm_nbd(pcols,100,pver)
+   real(r8) :: zi_nbd(pcols,100,pver)
+   real(r8) :: pap_nbd(pcols,100,pver)
+   real(r8) :: paph_nbd(pcols,100,pver+1)
+   real(r8) :: geos_nbd(pcols,100)
+   
+   real(r8) :: q_nbd(pcols,100,pver)
+   real(r8) :: p_nbd(pcols,100,pver)
+   real(r8) :: z_nbd(pcols,100,pver)
+   real(r8) :: pf_nbd(pcols,100,pver+1)
+   real(r8) :: zs_nbd(pcols,100)
+   real(r8) :: cape_nbd(pcols,100)
 
+   real(r8) qmn(pcols,pver)
+   real(r8) tmn(pcols,pver)
+   real(r8) pmn(pcols,pver)
+   real(r8) zmn(pcols,pver)
+   real(r8) pfmn(pcols,pver+1)
+
+   real(r8) tpmn(pcols,pver)
+   real(r8) qstpmn(pcols,pver)
+   real(r8) tlmn(pcols)
+   real(r8) capemn(pcols)
+
+   integer, dimension(100) :: icols
+   integer lclmn(pcols)
+   integer lelmn(pcols)
+   integer lonmn(pcols)
+   integer maximn(pcols)
+
+   real(r8) sec(pcols)
+   !real(r8) lat_nbd(pcols,100)
+   !real(r8) lon_nbd(pcols,100)
 !
 !--------------------------Data statements------------------------------
 !
 ! Set internal variable "msg" (convection limit) to "limcnv-1"
 !
    msg = limcnv - 1
+! wx: 06/12/2020 Access data in the neighborhood
+   do i = 1,ncol
+      call nbrhd_get_nbrhd(lchnk,i,icols(1:n_hd(i))) 
+      t_nbd(i,1:n_hd(i),:)    = state_nbrhd%t(icols(1:n_hd(i)),:)
+      qh_nbd(i,1:n_hd(i),:)   = state_nbrhd%q(icols(1:n_hd(i)),:,1)
+      zm_nbd(i,1:n_hd(i),:)   = state_nbrhd%zm(icols(1:n_hd(i)),:) 
+      zi_nbd(i,1:n_hd(i),:)   = state_nbrhd%zi(icols(1:n_hd(i)),:) 
+      geos_nbd(i,1:n_hd(i))   = state_nbrhd%phis(icols(1:n_hd(i))) 
+      pap_nbd(i,1:n_hd(i),:)  = state_nbrhd%pmid(icols(1:n_hd(i)),:) 
+      paph_nbd(i,1:n_hd(i),:) = state_nbrhd%pint(icols(1:n_hd(i)),:)
+
+      !lat_nbd(i,1:n_hd(i))    = state_nbrhd%lat(icols(1:n_hd(i))) 
+      !lon_nbd(i,1:n_hd(i))    = state_nbrhd%lon(icols(1:n_hd(i))) 
+   end do
+   do i = 1,ncol
+      do ii = 1,n_hd(i)
+         zs_nbd(i,ii) = geos_nbd(i,ii)*rgrav
+         pf_nbd(i,ii,pver+1) = paph_nbd(i,ii,pver+1)*0.01_r8
+      end do
+   end do
+   do k = 1,pver
+      do i = 1,ncol
+         do ii = 1,n_hd(i)
+            p_nbd(i,ii,k)  = pap_nbd(i,ii,k)*0.01_r8
+            pf_nbd(i,ii,k) = paph_nbd(i,ii,k)*0.01_r8
+            z_nbd(i,ii,k)  = zm_nbd(i,ii,k) + zs_nbd(i,ii)
+            q_nbd(i,ii,k)  = qh_nbd(i,ii,k)
+         end do
+      end do
+   end do   
 !
 ! initialize necessary arrays.
 ! zero out variables not used in cam
@@ -672,13 +745,74 @@ subroutine zm_convr(lchnk   ,ncol    , &
       !    The differewnce of CAPE values from the two calls is DCAPE, based on the same launch level
 
          iclosure = .true.
+!! wx: 06/12/2020 Improve ZM Scheme 
+! Step 01: Calculate base domain lel
+  do k = 1,pver
+     do i = 1,ncol
+        qmn(i,k)  = q(i,k)
+        tmn(i,k)  = t(i,k)
+        pmn(i,k)  = p(i,k)
+        zmn(i,k)  = z(i,k)
+        pfmn(i,k) = pf(i,k)
+        do ii = 1,n_hd(i)
+           qmn(i,k)  = qmn(i,k)+q_nbd(i,ii,k) 
+           tmn(i,k)  = tmn(i,k)+t_nbd(i,ii,k) 
+           pmn(i,k)  = pmn(i,k)+p_nbd(i,ii,k) 
+           zmn(i,k)  = zmn(i,k)+z_nbd(i,ii,k) 
+           pfmn(i,k) = pfmn(i,k)+pf_nbd(i,ii,k) 
+        end do
+        qmn(i,k)  = qmn(i,k)/(n_hd(i)+1)
+        tmn(i,k)  = tmn(i,k)/(n_hd(i)+1)
+        pmn(i,k)  = pmn(i,k)/(n_hd(i)+1)
+        zmn(i,k)  = zmn(i,k)/(n_hd(i)+1)
+        pfmn(i,k) = pfmn(i,k)/(n_hd(i)+1)
+     end do
+  end do 
+  do i = 1,ncol
+     pfmn(i,pver+1) = pf(i,pver+1)
+     do ii = 1,n_hd(i)
+        pfmn(i,pver+1) = pfmn(i,pver+1)+pf_nbd(i,ii,pver+1)
+     end do
+     pfmn(i,pver+1) = pfmn(i,pver+1)/(n_hd(i)+1) 
+  end do 
+  ! lchnk = -1 : Calculate base domain lel
+  do i = 1,ncol
+     lelmn(i) = pver
+  end do
+         call buoyan_dilute(-1   ,ncol    , &
+                  qmn     ,tmn     ,pmn     ,zmn     ,pfmn     , &
+                  tpmn    ,qstpmn  ,tlmn    ,rl      ,capemn   , &
+                  pblt    ,lclmn   ,lelmn   ,lonmn   ,maximn   , &
+                  rgas    ,grav    ,cpres   ,msg     , &
+                  tpert   ,iclosure)
+! Step 02: (FOR CAPE CLOSURE !!!) Calculate all CAPEs (Pos+Neg) in base domain
+! For the neighborhood 
+   do i = 1,ncol
+      lel(i) = lelmn(i)
+      do ii = 1,n_hd(i)
+         call buoyan_dilute(lchnk ,1 , &
+                  q_nbd(i,ii,:) ,t_nbd(i,ii,:) ,p_nbd(i,ii,:) ,z_nbd(i,ii,:) ,pf_nbd(i,ii,:) , &
+                  tp(i,:)  ,qstp(i,:) ,tl(i)  ,rl     ,cape_nbd(i,ii) , &
+                  pblt(i)  ,lcl(i)    ,lel(i) ,lon(i) ,maxi(i)        , &
+                  rgas     ,grav      ,cpres  ,msg , &
+                  tpert(i) ,iclosure)
+      end do
+   end do
+! For the current column
          call buoyan_dilute(lchnk   ,ncol    , &
                   q       ,t       ,p       ,z       ,pf       , &
                   tp      ,qstp    ,tl      ,rl      ,cape     , &
                   pblt    ,lcl     ,lel     ,lon     ,maxi     , &
                   rgas    ,grav    ,cpres   ,msg     , &
                   tpert   ,iclosure)
-         
+! Step 03: (FOR CAPE CLOSURE !!!) Calculate the second term (SEC) with negtive contribution
+   !sec = 0._r8
+   sec = 999._r8
+!
+   do i = 1,ncol
+      call sec_wx(n_hd(i),cape_nbd(i,:),cape(i),sec(i))
+   end do 
+!! wx: 06/12/2020 Finish !!     
       if (trigdcape_ull .or. trig_dcape_only) then
          if (.not. allocated(dcapemx)) then
             allocate (dcapemx(pcols), stat=ierror)
@@ -753,7 +887,8 @@ subroutine zm_convr(lchnk   ,ncol    , &
            index(lengath) = i
        endif
      else
-      if (cape(i) > capelmt) then
+      !if (cape(i) > capelmt) then
+      if (cape(i)+sec(i) > capelmt .and. sec(i) < 0._r8) then ! wx: 06/12/2020
          lengath = lengath + 1
          index(lengath) = i
       end if
@@ -873,7 +1008,8 @@ subroutine zm_convr(lchnk   ,ncol    , &
                 qlg     ,dsubcld ,mb      ,capeg   ,tlg     , &
                 lclg    ,lelg    ,jt      ,maxg    ,1       , &
                 lengath ,rgas    ,grav    ,cpres   ,rl      , &
-                msg     ,capelmt_wk )
+                msg     ,capelmt_wk ,sec) ! wx: 06/12/2020
+                !msg     ,capelmt_wk )
 !
 ! limit cloud base mass flux to theoretical upper bound.
 !
@@ -2948,7 +3084,8 @@ subroutine closure(lchnk   , &
                    ql      ,dsubcld ,mb      ,cape    ,tl      , &
                    lcl     ,lel     ,jt      ,mx      ,il1g    , &
                    il2g    ,rd      ,grav    ,cp      ,rl      , &
-                   msg     ,capelmt )
+                   msg     ,capelmt ,sec)
+                   !msg     ,capelmt )
 !----------------------------------------------------------------------- 
 ! 
 ! Purpose: 
@@ -2975,7 +3112,7 @@ subroutine closure(lchnk   , &
 !-----------------------------Arguments---------------------------------
 !
    integer, intent(in) :: lchnk                 ! chunk identifier
-
+   real(r8), intent(in) :: sec(pcols) ! wx: 06/12/2020
    real(r8), intent(inout) :: q(pcols,pver)        ! spec humidity
    real(r8), intent(inout) :: t(pcols,pver)        ! temperature
    real(r8), intent(inout) :: p(pcols,pver)        ! pressure (mb)
@@ -3148,7 +3285,9 @@ subroutine closure(lchnk   , &
       end do
    end do
    do i = il1g,il2g
-      dltaa = -1._r8* (cape(i)-capelmt)
+      !dltaa = -1._r8* (cape(i)-capelmt)
+      dltaa = -1._r8* (cape(i)+sec(i)-capelmt) ! wx: 06/12/2020
+      if(sec(i) > 0._r8) dltaa = 0._r8         ! Should be negative contribution
       if (dadt(i) /= 0._r8) mb(i) = max(dltaa/tau/dadt(i),0._r8)
    end do
 !
@@ -3340,7 +3479,8 @@ subroutine buoyan_dilute(lchnk   ,ncol    , &
    real(r8), intent(out) :: tl(pcols)            ! parcel temperature at lcl
    real(r8), intent(out) :: cape(pcols)          ! convective aval. pot. energy.
    integer lcl(pcols)        !
-   integer lel(pcols)        !
+   !integer lel(pcols)        !
+   integer, intent(inout) :: lel(pcols) ! wx: 06/12/2020
    integer lon(pcols)        ! level of onset of deep convection
    integer mx(pcols)         ! level of max moist static energy
 !
@@ -3395,9 +3535,10 @@ subroutine buoyan_dilute(lchnk   ,ncol    , &
    do i = 1,ncol
       lon(i) = pver
       knt(i) = 0
-      lel(i) = pver
+      !lel(i) = pver ! wx: can not initialize lel here !!! 2020-12-31
       mx(i) = lon(i)
-      cape(i) = 0._r8
+      !cape(i) = 0._r8 !
+      cape(i) = -99999._r8 ! wx: initialize a big negative cape !!! 2021-01-05 
       hmax(i) = 0._r8
    end do
 
@@ -3538,6 +3679,14 @@ subroutine buoyan_dilute(lchnk   ,ncol    , &
          end if
       end do
    end do
+! wx: 06/12/2020
+   if(lchnk /= -1) then
+     do n = 1,num_cin
+        do i = 1,ncol
+           lelten(i,n) = lel(i)
+        end do   
+     end do  
+   end if 
 !
 ! calculate convective available potential energy (cape).
 !
@@ -3566,9 +3715,10 @@ subroutine buoyan_dilute(lchnk   ,ncol    , &
 !
 ! put lower bound on cape for diagnostic purposes.
 !
-   do i = 1,ncol
-      cape(i) = max(cape(i), 0._r8)
-   end do
+! wx: do not let cape be positive !!!
+   !do i = 1,ncol
+   !   cape(i) = max(cape(i), 0._r8)
+   !end do
 !
    return
 end subroutine buoyan_dilute
@@ -4045,4 +4195,91 @@ elemental subroutine qsat_hPa(t, p, es, qm)
 
 end subroutine qsat_hPa
 
+!! wx: 06/12/2020
+subroutine sec_wx(ncol,cape_nbd,cape0,sec)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Calculate the second term with negative contribution !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+use shr_kind_mod, only: r8 => shr_kind_r8
+
+implicit none
+
+!INPUT
+integer,intent(in)::ncol
+real(r8),intent(in)::cape_nbd(ncol)
+real(r8),intent(in)::cape0
+!OUTPUT
+real(r8),intent(out)::sec
+!LOCAL
+real(r8),dimension(ncol+1)::cape
+integer::i,ii,jj,aa,bb,npos,nneg
+real(r8)::cape_pos(ncol+1),cape_neg(ncol+1)
+real(r8)::ten_val,sum_pos,sum_neg,favg
+
+! Get CAPE of the current column and its neighborhood CAPEs in base domain
+! Also get postive CAPEs and negative CAPEs
+cape(1)   = cape0
+cape(2:ncol+1) = cape_nbd
+aa = 1
+bb = 1
+do i = 1,ncol+1
+   if(cape(i).le.0.) then
+     cape_neg(bb) = cape(i)
+     bb = bb+1
+   else
+     cape_pos(aa) = cape(i)
+     aa = aa+1
+   end if
+end do
+npos = 0
+nneg = 0
+if(aa.ge.2) then
+  npos = aa-1
+end if
+if(bb.ge.2) then
+  nneg = bb-1
+end if
+! Already got numbers of the positive and negative CAPEs 
+! Next, rank positive CAPEs in descending order
+if(npos==0) then
+  sec = 999._r8 ! if there are no positive CAPEs, set SEC a positive value.
+end if
+if(npos.gt.0) then
+  if(npos.gt.1) then
+    do ii = 1,npos-1
+       do jj = ii+1,npos
+          if(cape_pos(ii).le.cape_pos(jj)) then
+            ten_val = cape_pos(ii)
+            cape_pos(ii) = cape_pos(jj)
+            cape_pos(jj) = ten_val
+          end if
+       end do
+    end do
+  end if
+  print *,"XU"
+  print *,cape_pos(1:npos)
+  ! Get the sum of negative CAPEs
+  sum_neg = 0._r8
+  if(nneg/=0) then
+    do jj = 1,nneg
+       sum_neg = sum_neg+cape_neg(jj)
+    end do
+  end if 
+  ! Find J and get the sum of [(J+1)~NPOS] CAPEs
+  do ii = 1,npos-1
+     sum_pos = 0._r8
+     if(npos.gt.1) then
+       do jj = ii,npos
+          sum_pos = sum_pos+cape_pos(jj)
+       end do
+     end if
+     favg = -1.0*(sum_pos+sum_neg)/(npos-ii+nneg)
+     if(cape_pos(ii).gt.(favg*(ncol+1-ii)/ii)) then
+       sec = -1.0*favg*(ncol+1-ii)/ii
+     end if
+  end do
+end if
+!print *,"XU: SEC:",sec
+end subroutine sec_wx
+!
 end module zm_conv
