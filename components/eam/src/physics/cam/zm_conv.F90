@@ -623,7 +623,8 @@ subroutine zm_convr(lchnk   ,ncol    , &
             q_nbd(i,ii,k)  = qh_nbd(i,ii,k)
          end do
       end do
-   end do   
+   end do
+   print *,"XU: OK...01"   
 !
 ! initialize necessary arrays.
 ! zero out variables not used in cam
@@ -775,6 +776,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
      end do
      pfmn(i,pver+1) = pfmn(i,pver+1)/(n_hd(i)+1) 
   end do 
+  print *,"XU: OK...02"
   ! lchnk = -1 : Calculate base domain lel
   do i = 1,ncol
      lelmn(i) = pver
@@ -785,6 +787,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
                   pblt    ,lclmn   ,lelmn   ,lonmn   ,maximn   , &
                   rgas    ,grav    ,cpres   ,msg     , &
                   tpert   ,iclosure)
+  print *,"XU: OK...03"
 ! Step 02: (FOR CAPE CLOSURE !!!) Calculate all CAPEs (Pos+Neg) in base domain
 ! For the neighborhood 
    do i = 1,ncol
@@ -798,6 +801,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
                   tpert(i) ,iclosure)
       end do
    end do
+  print *,"XU: OK...04"
 ! For the current column
          call buoyan_dilute(lchnk   ,ncol    , &
                   q       ,t       ,p       ,z       ,pf       , &
@@ -805,9 +809,10 @@ subroutine zm_convr(lchnk   ,ncol    , &
                   pblt    ,lcl     ,lel     ,lon     ,maxi     , &
                   rgas    ,grav    ,cpres   ,msg     , &
                   tpert   ,iclosure)
+  print *,"XU: OK...05"
 ! Step 03: (FOR CAPE CLOSURE !!!) Calculate the second term (SEC) with negtive contribution
    !sec = 0._r8
-   sec = 999._r8
+   !sec = 999._r8
 !
    do i = 1,ncol
       call sec_wx(n_hd(i),cape_nbd(i,:),cape(i),sec(i))
@@ -3538,7 +3543,7 @@ subroutine buoyan_dilute(lchnk   ,ncol    , &
       !lel(i) = pver ! wx: can not initialize lel here !!! 2020-12-31
       mx(i) = lon(i)
       !cape(i) = 0._r8 !
-      cape(i) = -99999._r8 ! wx: initialize a big negative cape !!! 2021-01-05 
+      cape(i) = -9999._r8 ! wx: initialize a big negative cape !!! 2021-01-05 
       hmax(i) = 0._r8
    end do
 
@@ -4212,39 +4217,32 @@ real(r8),intent(in)::cape0
 real(r8),intent(out)::sec
 !LOCAL
 real(r8),dimension(ncol+1)::cape
-integer::i,ii,jj,aa,bb,npos,nneg
+integer::i,ii,jj,npos,nneg
 real(r8)::cape_pos(ncol+1),cape_neg(ncol+1)
 real(r8)::ten_val,sum_pos,sum_neg,favg
 
-! Get CAPE of the current column and its neighborhood CAPEs in base domain
-! Also get postive CAPEs and negative CAPEs
+! Get the current column CAPE and its neighborhood CAPEs in a base domain (1deg*1deg)
+! Classify to the postive CAPEs and negative CAPEs (here negative CAPEs includes zero!)
 cape(1)   = cape0
 cape(2:ncol+1) = cape_nbd
-aa = 1
-bb = 1
-do i = 1,ncol+1
-   if(cape(i).le.0.) then
-     cape_neg(bb) = cape(i)
-     bb = bb+1
-   else
-     cape_pos(aa) = cape(i)
-     aa = aa+1
-   end if
-end do
 npos = 0
 nneg = 0
-if(aa.ge.2) then
-  npos = aa-1
-end if
-if(bb.ge.2) then
-  nneg = bb-1
-end if
+do i = 1,ncol+1
+   if(cape(i).le.0.) then
+     cape_neg(nneg+1) = cape(i)
+     nneg = nneg+1
+   else
+     cape_pos(npos+1) = cape(i)
+     npos = npos+1
+   end if
+end do
 ! Already got numbers of the positive and negative CAPEs 
 ! Next, rank positive CAPEs in descending order
 if(npos==0) then
-  sec = 999._r8 ! if there are no positive CAPEs, set SEC a positive value.
+  sec = 999._r8 ! if there are no positive CAPEs, set SEC a large positive value.
 end if
 if(npos.gt.0) then
+  !if npos=1, then there is only one positive CAPE and no need to rank.
   if(npos.gt.1) then
     do ii = 1,npos-1
        do jj = ii+1,npos
@@ -4256,30 +4254,32 @@ if(npos.gt.0) then
        end do
     end do
   end if
-  print *,"XU"
+  print *,"XU: Check if positive CAPEs are ranked in descending order!!! "
   print *,cape_pos(1:npos)
   ! Get the sum of negative CAPEs
-  sum_neg = 0._r8
+  sum_neg = 0._r8 ! no negative CAPE
   if(nneg/=0) then
     do jj = 1,nneg
        sum_neg = sum_neg+cape_neg(jj)
     end do
   end if 
   ! Find J and get the sum of [(J+1)~NPOS] CAPEs
-  do ii = 1,npos-1
-     sum_pos = 0._r8
-     if(npos.gt.1) then
-       do jj = ii,npos
-          sum_pos = sum_pos+cape_pos(jj)
-       end do
-     end if
-     favg = -1.0*(sum_pos+sum_neg)/(npos-ii+nneg)
-     if(cape_pos(ii).gt.(favg*(ncol+1-ii)/ii)) then
-       sec = -1.0*favg*(ncol+1-ii)/ii
-     end if
-  end do
+  if(npos.gt.1) then ! At least two positive CAPEs or no need to calculate sec, sec = 999.
+    do ii = 1,npos-1 
+       sum_pos = 0._r8 ! if (NPOS-J) = 0
+       if((npos-ii).gt.0) then
+         do jj = ii+1,npos
+            sum_pos = sum_pos+cape_pos(jj)
+         end do
+       end if    
+       favg = -1.0*(sum_pos+sum_neg)/(npos-ii+nneg)
+       if(cape_pos(ii).gt.(favg*(ncol+1-ii)/ii)) then
+         sec = -1.0*favg*(ncol+1-ii)/ii
+       end if
+    end do
+  end if  
 end if
-!print *,"XU: SEC:",sec
+print *,"XU: SEC:",sec
 end subroutine sec_wx
 !
 end module zm_conv
